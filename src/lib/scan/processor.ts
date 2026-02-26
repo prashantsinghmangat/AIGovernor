@@ -264,14 +264,27 @@ export async function processPendingScan(): Promise<{
 
     // 6. Insert scan results in batches
     if (scanResults.length > 0) {
-      const BATCH_SIZE = 50;
+      const BATCH_SIZE = 25;
+      let insertedCount = 0;
       for (let i = 0; i < scanResults.length; i += BATCH_SIZE) {
         const batch = scanResults.slice(i, i + BATCH_SIZE);
         const { error: insertError } = await admin.from('scan_results').insert(batch);
         if (insertError) {
-          console.error(`[Scan Processor] Error inserting scan results batch:`, insertError.message);
+          console.error(`[Scan Processor] Batch insert error (batch ${Math.floor(i / BATCH_SIZE) + 1}):`, insertError.message, insertError.code);
+          // Retry: insert one-by-one for failed batch
+          for (const row of batch) {
+            const { error: singleError } = await admin.from('scan_results').insert(row);
+            if (singleError) {
+              console.error(`[Scan Processor] Single insert failed for ${row.file_path}:`, singleError.message);
+            } else {
+              insertedCount++;
+            }
+          }
+        } else {
+          insertedCount += batch.length;
         }
       }
+      console.log(`[Scan Processor] Inserted ${insertedCount}/${scanResults.length} scan results`);
     }
 
     await admin.from('scans').update({ progress: 85 }).eq('id', scanId);

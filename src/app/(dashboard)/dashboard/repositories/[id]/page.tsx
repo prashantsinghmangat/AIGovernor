@@ -281,11 +281,18 @@ export default function RepositoryDetailPage() {
   const { data, isLoading } = useRepository(repoId)
   const { data: githubStatus } = useGitHubStatus()
   const { mutate: triggerScan, isPending: scanPending } = useTriggerScan()
-  const { data: scanStatus } = useScanStatus(activeScanId)
+
+  // Auto-detect running/pending scans from scan_history (survives navigation)
+  const runningScanFromHistory = data?.scan_history?.find(
+    s => s.status === "running" || s.status === "pending"
+  )
+  const trackingScanId = activeScanId ?? runningScanFromHistory?.id ?? null
+
+  const { data: scanStatus } = useScanStatus(trackingScanId)
 
   const scanProgress = scanStatus?.data?.progress ?? 0
   const scanState = scanStatus?.data?.status
-  const isScanning = activeScanId && scanState !== "completed" && scanState !== "failed"
+  const isScanning = trackingScanId && scanState !== "completed" && scanState !== "failed"
 
   // Find latest completed scan for file results
   const latestCompletedScanId = data?.scan_history?.find(s => s.status === "completed")?.id ?? null
@@ -293,18 +300,18 @@ export default function RepositoryDetailPage() {
 
   // When scan completes or fails, refresh data and clear tracking
   useEffect(() => {
-    if (activeScanId && scanState === "completed") {
+    if (trackingScanId && scanState === "completed") {
       toast.success("Scan completed!")
       queryClient.invalidateQueries({ queryKey: ["repository", repoId] })
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       queryClient.invalidateQueries({ queryKey: ["scan-results"] })
       setActiveScanId(null)
-    } else if (activeScanId && scanState === "failed") {
+    } else if (trackingScanId && scanState === "failed") {
       toast.error("Scan failed: " + (scanStatus?.data?.error_message || "Unknown error"))
       setActiveScanId(null)
     }
-  }, [activeScanId, scanState, scanStatus, queryClient, repoId])
+  }, [trackingScanId, scanState, scanStatus, queryClient, repoId])
 
   const handleTriggerScan = () => {
     triggerScan(
@@ -430,7 +437,7 @@ export default function RepositoryDetailPage() {
               View on GitHub
             </a>
           </Button>
-          <Button size="sm" onClick={handleTriggerScan} disabled={scanPending || !!isScanning}>
+          <Button size="sm" onClick={handleTriggerScan} disabled={scanPending || !!isScanning || !!runningScanFromHistory}>
             {scanPending || isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanIcon className="mr-2 h-4 w-4" />}
             {isScanning ? "Scanning..." : scanPending ? "Queuing..." : "Trigger Scan"}
           </Button>

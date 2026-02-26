@@ -7,9 +7,8 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
   const errorParam = request.nextUrl.searchParams.get('error');
 
-  console.log('[GitHub Callback] URL:', request.nextUrl.toString());
-  console.log('[GitHub Callback] code:', code ? `received (${code.slice(0, 8)}...)` : 'MISSING ❌');
-  console.log('[GitHub Callback] error from GitHub:', errorParam || 'none');
+  console.log('[GitHub Callback] code:', code ? 'received' : 'MISSING');
+  if (errorParam) console.log('[GitHub Callback] error from GitHub:', errorParam);
 
   if (!code) {
     console.error('[GitHub Callback] No code in callback — GitHub may have rejected the request');
@@ -19,7 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     console.log('[GitHub Callback] Exchanging code for token...');
     const token = await exchangeCodeForToken(code);
-    console.log('[GitHub Callback] Token received:', token ? `yes (${token.slice(0, 8)}...)` : 'EMPTY ❌');
+    console.log('[GitHub Callback] Token received:', token ? 'yes' : 'EMPTY');
 
     const supabase = await createServerSupabase();
     const { data: { user }, error: userError } = await supabase.auth.getUser();

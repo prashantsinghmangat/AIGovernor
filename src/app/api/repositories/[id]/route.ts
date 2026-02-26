@@ -54,23 +54,33 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const latestScore = latestScoreRes.data?.[0] ?? null;
   const latestCompletedScan = scanHistoryRes.data?.find((s) => s.status === 'completed') ?? null;
 
-  // Count files from the latest completed scan
+  // Get file counts from the scan summary (primary) with DB count as fallback
   let filesScanned = 0;
   let aiFilesDetected = 0;
   if (latestCompletedScan) {
-    const { count: totalFiles } = await supabase
-      .from('scan_results')
-      .select('id', { count: 'exact', head: true })
-      .eq('scan_id', latestCompletedScan.id);
+    const summary = latestCompletedScan.summary as Record<string, unknown> | null;
+    const summaryFiles = summary?.total_files_scanned as number | undefined;
+    const summaryAiFiles = summary?.ai_files_detected as number | undefined;
 
-    const { count: aiFiles } = await supabase
-      .from('scan_results')
-      .select('id', { count: 'exact', head: true })
-      .eq('scan_id', latestCompletedScan.id)
-      .gt('ai_probability', 0.5);
+    if (summaryFiles != null) {
+      filesScanned = summaryFiles;
+      aiFilesDetected = summaryAiFiles ?? 0;
+    } else {
+      // Fallback: count from scan_results table
+      const { count: totalFiles } = await supabase
+        .from('scan_results')
+        .select('id', { count: 'exact', head: true })
+        .eq('scan_id', latestCompletedScan.id);
 
-    filesScanned = totalFiles ?? 0;
-    aiFilesDetected = aiFiles ?? 0;
+      const { count: aiFiles } = await supabase
+        .from('scan_results')
+        .select('id', { count: 'exact', head: true })
+        .eq('scan_id', latestCompletedScan.id)
+        .gt('ai_probability', 0.5);
+
+      filesScanned = totalFiles ?? 0;
+      aiFilesDetected = aiFiles ?? 0;
+    }
   }
 
   return NextResponse.json({

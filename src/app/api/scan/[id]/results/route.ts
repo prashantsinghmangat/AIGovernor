@@ -31,8 +31,11 @@ export async function GET(
     .order('ai_probability', { ascending: false });
 
   if (error) {
+    console.error(`[Scan Results API] Error fetching results for scan ${id}:`, error.message, error.code);
     return NextResponse.json({ error: error.message, code: 'INTERNAL_ERROR' }, { status: 500 });
   }
+
+  console.log(`[Scan Results API] Scan ${id}: found ${results?.length ?? 0} results`);
 
   return NextResponse.json({
     data: {
