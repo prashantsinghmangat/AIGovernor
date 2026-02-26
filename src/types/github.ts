@@ -94,3 +94,26 @@ export interface MLResult {
   model_version: string;
   features_used: string[];
 }
+
+export type VulnerabilitySeverity = 'critical' | 'high' | 'medium' | 'low';
+
+export interface VulnerabilityFinding {
+  id: string;
+  severity: VulnerabilitySeverity;
+  category: string;
+  title: string;
+  description: string;
+  line: number;
+  matchedText: string;
+  cwe?: string;
+}
+
+export interface VulnerabilityResult {
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  findings: VulnerabilityFinding[];
+  scanned: boolean;
+}

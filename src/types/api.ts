@@ -105,6 +105,15 @@ export interface RepositoryWithStats {
   // Enriched from joins
   debt_score: number | null;
   risk_zone: string | null;
+  latest_scan_at: string | null;
+  latest_scan_status: string | null;
+  vulnerabilities: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    total: number;
+  } | null;
 }
 
 // Full repository detail response
@@ -143,6 +152,7 @@ export interface RepositoryDetail {
     created_at: string;
     completed_at: string | null;
     summary: Record<string, unknown> | null;
+    commit_sha: string | null;
   }>;
   score_trend: Array<{
     date: string;
@@ -153,6 +163,13 @@ export interface RepositoryDetail {
     files_scanned: number;
     ai_files_detected: number;
     active_alerts: number;
+    vulnerabilities: {
+      critical: number;
+      high: number;
+      medium: number;
+      low: number;
+      total: number;
+    } | null;
   };
 }
 

@@ -194,6 +194,7 @@ export interface Database {
           scan_to: string | null;
           summary: Json;
           error_message: string | null;
+          commit_sha: string | null;
           started_at: string | null;
           completed_at: string | null;
           created_at: string;
@@ -210,6 +211,7 @@ export interface Database {
           scan_to?: string | null;
           summary?: Json;
           error_message?: string | null;
+          commit_sha?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -226,6 +228,7 @@ export interface Database {
           scan_to?: string | null;
           summary?: Json;
           error_message?: string | null;
+          commit_sha?: string | null;
           started_at?: string | null;
           completed_at?: string | null;
           created_at?: string;

@@ -9,9 +9,11 @@ import { AlertCard } from '@/components/dashboard/alert-card';
 import { ScoreTrendChart } from '@/components/charts/score-trend-chart';
 import { AIUsageChart } from '@/components/charts/ai-usage-chart';
 import { RiskHeatmap } from '@/components/charts/risk-heatmap';
-import { FileCode, Users, AlertTriangle, RefreshCw } from 'lucide-react';
+import { FileCode, Users, AlertTriangle, RefreshCw, Github, GitBranch, Lock, Globe, ChevronRight, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
-import type { DashboardData } from '@/types/api';
+import type { DashboardData, RepositoryWithStats } from '@/types/api';
+import { useGitHubStatus } from '@/hooks/use-github-status';
+import { useRepositories } from '@/hooks/use-repositories';
 
 function useDashboard() {
   return useQuery<DashboardData>({
@@ -27,6 +29,9 @@ function useDashboard() {
 
 export default function DashboardPage() {
   const { data, isLoading } = useDashboard();
+  const { data: githubStatus } = useGitHubStatus();
+  const { data: reposData } = useRepositories();
+  const repositories: RepositoryWithStats[] = (reposData as { repositories: RepositoryWithStats[] })?.repositories ?? [];
 
   if (isLoading) {
     return (
@@ -62,9 +67,20 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-display font-bold text-white">Governance Dashboard</h1>
-        <p className="text-sm text-[#8892b0] mt-1">
-          Last scan: {data?.last_scan ?? '--'} &middot; {data?.repos_monitored ?? 0} repos monitored
-        </p>
+        <div className="flex items-center gap-3 text-sm text-[#8892b0] mt-1 flex-wrap">
+          <span>Last scan: {data?.last_scan ?? '--'}</span>
+          <span>&middot;</span>
+          <span>{data?.repos_monitored ?? 0} repos monitored</span>
+          {githubStatus?.github_username && (
+            <>
+              <span>&middot;</span>
+              <span className="flex items-center gap-1">
+                <Github className="h-3.5 w-3.5" />
+                @{githubStatus.github_username}
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -108,6 +124,83 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {/* Monitored Repositories */}
+      {repositories.length > 0 && (
+        <Card className="bg-[#131b2e] border-[#1e2a4a]">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-white text-base">Monitored Repositories</CardTitle>
+            <Link href="/dashboard/repositories" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+              View all <ChevronRight className="h-3 w-3" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {repositories.map((repo) => {
+                const riskColors: Record<string, string> = {
+                  healthy: 'text-green-400 bg-green-500/10',
+                  caution: 'text-amber-400 bg-amber-500/10',
+                  critical: 'text-red-400 bg-red-500/10',
+                };
+                const riskColor = riskColors[repo.risk_zone ?? ''] ?? 'text-gray-400 bg-gray-500/10';
+                return (
+                  <Link
+                    key={repo.id}
+                    href={`/dashboard/repositories/${repo.id}`}
+                    className="flex items-center justify-between p-3 rounded-lg bg-[#0d1321] border border-[#1e2a4a] hover:border-[#253358] transition-colors group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-1.5 bg-blue-500/10 rounded">
+                        <GitBranch className="h-4 w-4 text-blue-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-white truncate">{repo.full_name}</span>
+                          {repo.is_private ? (
+                            <Lock className="h-3 w-3 text-[#5a6480] shrink-0" />
+                          ) : (
+                            <Globe className="h-3 w-3 text-[#5a6480] shrink-0" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-[#5a6480] mt-0.5">
+                          {repo.language && <span>{repo.language}</span>}
+                          {repo.latest_scan_at && (
+                            <>
+                              {repo.language && <span>&middot;</span>}
+                              <span>Scanned {new Date(repo.latest_scan_at).toLocaleDateString()}</span>
+                            </>
+                          )}
+                          {!repo.latest_scan_at && <span>Not scanned yet</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      {repo.vulnerabilities && repo.vulnerabilities.total > 0 && (
+                        <div className="flex items-center gap-1 text-right">
+                          <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+                          <span className="text-xs font-mono text-red-400">{repo.vulnerabilities.total}</span>
+                        </div>
+                      )}
+                      {repo.debt_score != null && (
+                        <div className="text-right">
+                          <div className="text-sm font-mono font-bold text-white">{repo.debt_score}</div>
+                          <div className="text-[10px] text-[#5a6480]">score</div>
+                        </div>
+                      )}
+                      {repo.risk_zone && (
+                        <span className={`text-[10px] font-medium uppercase px-2 py-0.5 rounded ${riskColor}`}>
+                          {repo.risk_zone}
+                        </span>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-[#5a6480] group-hover:text-blue-400 transition-colors" />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {usageData.length > 0 ? (

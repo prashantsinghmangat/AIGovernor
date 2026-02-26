@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState, useEffect } from "react"
+import { Fragment, useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -31,8 +31,10 @@ import {
   ChevronRight,
   ChevronDown,
   Eye,
+  Github,
 } from "lucide-react"
 import { useRepository } from "@/hooks/use-repository"
+import { useGitHubStatus } from "@/hooks/use-github-status"
 import { useTriggerScan, useScanStatus, useScanResults } from "@/hooks/use-scan"
 import { toast } from "sonner"
 import { GaugeChart } from "@/components/dashboard/gauge-chart"
@@ -93,6 +95,49 @@ function SignalBar({ score, color }: { score: number; color: string }) {
   )
 }
 
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: "bg-red-500/30 text-red-300",
+  high: "bg-orange-500/30 text-orange-300",
+  medium: "bg-amber-500/30 text-amber-300",
+  low: "bg-blue-500/30 text-blue-300",
+}
+
+const SEVERITY_BOX_COLORS: Record<string, string> = {
+  critical: "bg-red-500/10 border border-red-500/30 text-red-300",
+  high: "bg-orange-500/10 border border-orange-500/30 text-orange-300",
+  medium: "bg-amber-500/10 border border-amber-500/30 text-amber-300",
+  low: "bg-blue-500/10 border border-blue-500/30 text-blue-300",
+}
+
+function SeverityBadge({ severity }: { severity: string }) {
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${SEVERITY_COLORS[severity] ?? ""}`}>
+      {severity}
+    </span>
+  )
+}
+
+interface VulnFinding {
+  id: string
+  severity: string
+  category: string
+  title: string
+  description: string
+  line: number
+  matchedText: string
+  cwe?: string
+}
+
+interface VulnResult {
+  total_findings: number
+  critical_count: number
+  high_count: number
+  medium_count: number
+  low_count: number
+  findings: VulnFinding[]
+  scanned: boolean
+}
+
 function DetectionSignalPanel({ signals }: { signals: Record<string, unknown> }) {
   const method = (signals.method as string) ?? "unknown"
   const metadata = signals.metadata as {
@@ -106,6 +151,7 @@ function DetectionSignalPanel({ signals }: { signals: Record<string, unknown> })
     signals?: Record<string, number>
   } | null
   const styleSignals = style?.signals ?? {}
+  const vulnerabilities = signals.vulnerabilities as VulnResult | null
 
   return (
     <div className="bg-[#0d1321] border-t border-[#1e2a4a] px-6 py-4 space-y-4">
@@ -138,6 +184,39 @@ function DetectionSignalPanel({ signals }: { signals: Record<string, unknown> })
               <> &mdash; confidence: <span className="font-mono">{(metadata.confidence * 100).toFixed(0)}%</span></>
             )}
           </p>
+        </div>
+      )}
+
+      {/* Security findings */}
+      {vulnerabilities && vulnerabilities.total_findings > 0 && (
+        <div>
+          <p className="text-xs font-medium uppercase text-[#5a6480] mb-3">
+            Security Findings
+            <span className="ml-2 font-mono text-red-400">
+              {vulnerabilities.total_findings} issue{vulnerabilities.total_findings > 1 ? "s" : ""}
+            </span>
+          </p>
+          <div className="space-y-2">
+            {vulnerabilities.findings.map((finding, idx) => (
+              <div
+                key={`${finding.id}-${finding.line}-${idx}`}
+                className={`rounded-lg p-3 text-xs ${SEVERITY_BOX_COLORS[finding.severity] ?? ""}`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <SeverityBadge severity={finding.severity} />
+                  <span className="font-medium">{finding.title}</span>
+                  <span className="text-[#5a6480] ml-auto font-mono">Line {finding.line}</span>
+                  {finding.cwe && (
+                    <span className="text-[#5a6480] font-mono">{finding.cwe}</span>
+                  )}
+                </div>
+                <p className="text-[#8892b0]">{finding.description}</p>
+                <p className="font-mono mt-1 text-[#c8cdd8] bg-black/20 rounded px-2 py-1 truncate">
+                  {finding.matchedText}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -182,8 +261,8 @@ function DetectionSignalPanel({ signals }: { signals: Record<string, unknown> })
         </div>
       )}
 
-      {/* No style signals */}
-      {Object.keys(styleSignals).length === 0 && !metadata?.matched && (
+      {/* No data at all */}
+      {Object.keys(styleSignals).length === 0 && !metadata?.matched && (!vulnerabilities || vulnerabilities.total_findings === 0) && (
         <p className="text-xs text-[#5a6480]">No detailed signal data available for this file.</p>
       )}
     </div>
@@ -196,9 +275,11 @@ export default function RepositoryDetailPage() {
   const queryClient = useQueryClient()
   const [activeScanId, setActiveScanId] = useState<string | null>(null)
   const [expandedFileId, setExpandedFileId] = useState<string | null>(null)
-  const [riskFilter, setRiskFilter] = useState<"all" | "high" | "medium" | "low">("all")
+  const [riskFilter, setRiskFilter] = useState<"all" | "high" | "medium" | "low" | "vulns">("all")
+  const fileTableRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading } = useRepository(repoId)
+  const { data: githubStatus } = useGitHubStatus()
   const { mutate: triggerScan, isPending: scanPending } = useTriggerScan()
   const { data: scanStatus } = useScanStatus(activeScanId)
 
@@ -269,6 +350,12 @@ export default function RepositoryDetailPage() {
 
   const { repository: repo, latest_score, scan_history, score_trend, stats } = data
 
+  // Get latest scan commit SHA
+  const latestCompletedScan = scan_history.find(s => s.status === "completed")
+  const latestScanCommit = latestCompletedScan?.commit_sha
+    || (latestCompletedScan?.summary as { commit_sha?: string } | null)?.commit_sha
+    || null
+
   const riskZone = latest_score?.risk_zone
   const riskBadgeVariant =
     riskZone === "critical" || riskZone === "high" ? "destructive" : "secondary"
@@ -304,6 +391,31 @@ export default function RepositoryDetailPage() {
               <span className="flex items-center gap-1"><Lock className="h-3 w-3" /> Private</span>
             ) : (
               <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> Public</span>
+            )}
+            {githubStatus?.github_username && (
+              <>
+                <span>&middot;</span>
+                <span className="flex items-center gap-1">
+                  <Github className="h-3 w-3" />
+                  @{githubStatus.github_username}
+                </span>
+              </>
+            )}
+            {latestScanCommit && (
+              <>
+                <span>&middot;</span>
+                <span className="flex items-center gap-1">
+                  Last scan at{" "}
+                  <a
+                    href={`https://github.com/${repo.full_name}/commit/${latestScanCommit}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-blue-400 hover:text-blue-300"
+                  >
+                    {latestScanCommit.slice(0, 7)}
+                  </a>
+                </span>
+              </>
             )}
           </div>
         </div>
@@ -469,6 +581,67 @@ export default function RepositoryDetailPage() {
         </Card>
       )}
 
+      {/* Vulnerability Summary */}
+      {stats.vulnerabilities && stats.vulnerabilities.total > 0 && (
+        <Card className="border-red-500/20 bg-[#131b2e]">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlertIcon className="h-4 w-4 text-red-400" />
+              <CardTitle className="text-sm text-red-300">Security Vulnerabilities</CardTitle>
+              <Badge variant="destructive" className="ml-auto text-xs">
+                {stats.vulnerabilities.total} finding{stats.vulnerabilities.total > 1 ? "s" : ""}
+              </Badge>
+            </div>
+            <CardDescription className="text-[#5a6480]">
+              Detected in the latest scan. Click file rows below to see details.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-red-400">
+                  {stats.vulnerabilities.critical}
+                </p>
+                <p className="text-xs text-[#8892b0]">Critical</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-orange-400">
+                  {stats.vulnerabilities.high}
+                </p>
+                <p className="text-xs text-[#8892b0]">High</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-amber-400">
+                  {stats.vulnerabilities.medium}
+                </p>
+                <p className="text-xs text-[#8892b0]">Medium</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-blue-400">
+                  {stats.vulnerabilities.low}
+                </p>
+                <p className="text-xs text-[#8892b0]">Low</p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4 w-full border-red-500/30 text-red-300 hover:bg-red-500/10"
+              onClick={() => {
+                setRiskFilter("vulns")
+                setExpandedFileId(null)
+                setTimeout(() => {
+                  fileTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }, 100)
+              }}
+            >
+              <ShieldAlertIcon className="mr-2 h-4 w-4" />
+              View Vulnerable Files
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* File Analysis Results */}
       {latestCompletedScanId && !resultsLoading && scanResults && scanResults.results.length > 0 && (
         <>
@@ -510,10 +683,33 @@ export default function RepositoryDetailPage() {
                 text: `Average AI probability is ${avgProb}% with no high-risk files. This is a normal range — the style analyzer detects common patterns in well-structured code. No immediate action needed.`,
               })
             }
+            // Vulnerability recommendations
+            const vulnStats = stats.vulnerabilities
+            if (vulnStats) {
+              if (vulnStats.critical > 0) {
+                recommendations.unshift({
+                  severity: "high",
+                  text: `${vulnStats.critical} critical security finding${vulnStats.critical > 1 ? "s" : ""} detected (hardcoded secrets, code injection). These must be remediated immediately before merging.`,
+                })
+              }
+              if (vulnStats.high > 0) {
+                recommendations.push({
+                  severity: "high",
+                  text: `${vulnStats.high} high-severity security finding${vulnStats.high > 1 ? "s" : ""} detected (XSS, command injection). Review flagged files and apply fixes.`,
+                })
+              }
+              if (vulnStats.medium > 0) {
+                recommendations.push({
+                  severity: "medium",
+                  text: `${vulnStats.medium} medium-severity security finding${vulnStats.medium > 1 ? "s" : ""} detected (weak crypto, insecure cookies). Schedule remediation within the current sprint.`,
+                })
+              }
+            }
+
             if (recommendations.length === 0) {
               recommendations.push({
                 severity: "low",
-                text: "No significant AI governance concerns detected. Continue monitoring with regular scans.",
+                text: "No significant AI governance or security concerns detected. Continue monitoring with regular scans.",
               })
             }
 
@@ -600,17 +796,17 @@ export default function RepositoryDetailPage() {
           })()}
 
           {/* File Table */}
-          <Card className="border-[#1e2a4a] bg-[#131b2e]">
+          <Card ref={fileTableRef} className="border-[#1e2a4a] bg-[#131b2e]">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
                   <CardTitle className="text-white">File Analysis Results</CardTitle>
                   <CardDescription className="text-[#8892b0] mt-1">
-                    {scanResults.total} files analyzed. Click any row to see why it was flagged.
+                    {scanResults.total} files analyzed. Click any row to see detection details{stats.vulnerabilities && stats.vulnerabilities.total > 0 ? " and security findings" : ""}.
                   </CardDescription>
                 </div>
                 <div className="flex gap-1.5">
-                  {(["all", "high", "medium", "low"] as const).map((level) => (
+                  {(["all", "high", "medium", "low", "vulns"] as const).map((level) => (
                     <Button
                       key={level}
                       variant={riskFilter === level ? "default" : "outline"}
@@ -624,11 +820,17 @@ export default function RepositoryDetailPage() {
                             ? "bg-amber-600 text-white text-xs"
                             : level === "low"
                             ? "bg-green-600 text-white text-xs"
+                            : level === "vulns"
+                            ? "bg-red-700 text-white text-xs"
                             : "bg-blue-600 text-white text-xs"
                           : "border-[#1e2a4a] text-[#8892b0] text-xs"
                       }
                     >
-                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                      {level === "vulns" ? (
+                        <span className="flex items-center gap-1"><ShieldAlertIcon className="h-3 w-3" />Vulns</span>
+                      ) : (
+                        level.charAt(0).toUpperCase() + level.slice(1)
+                      )}
                     </Button>
                   ))}
                 </div>
@@ -646,11 +848,19 @@ export default function RepositoryDetailPage() {
                       <th className="text-right text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-20">AI LOC</th>
                       <th className="text-right text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-20">AI Prob</th>
                       <th className="text-left text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-24">Risk</th>
+                      <th className="text-right text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-16">Vulns</th>
                     </tr>
                   </thead>
                   <tbody>
                     {scanResults.results
-                    .filter((f) => riskFilter === "all" || f.risk_level === riskFilter)
+                    .filter((f) => {
+                      if (riskFilter === "all") return true
+                      if (riskFilter === "vulns") {
+                        const v = f.detection_signals?.vulnerabilities as VulnResult | undefined
+                        return v != null && v.total_findings > 0
+                      }
+                      return f.risk_level === riskFilter
+                    })
                     .map((file) => {
                       const isExpanded = expandedFileId === file.id
                       return (
@@ -669,7 +879,16 @@ export default function RepositoryDetailPage() {
                               )}
                             </td>
                             <td className="text-sm text-[#e8eaf0] px-4 py-3 font-mono truncate" title={file.file_path}>
-                              {file.file_path}
+                              <span className="flex items-center gap-1.5">
+                                {(() => {
+                                  const v = file.detection_signals?.vulnerabilities as VulnResult | undefined
+                                  if (v && v.total_findings > 0) {
+                                    return <ShieldAlertIcon className="h-3.5 w-3.5 shrink-0 text-red-400" />
+                                  }
+                                  return null
+                                })()}
+                                <span className="truncate">{file.file_path}</span>
+                              </span>
                             </td>
                             <td className="text-sm text-[#8892b0] px-4 py-3">{file.language ?? "--"}</td>
                             <td className="text-sm text-[#e8eaf0] px-4 py-3 text-right font-mono">
@@ -705,10 +924,18 @@ export default function RepositoryDetailPage() {
                                 {file.risk_level}
                               </Badge>
                             </td>
+                            <td className="text-right px-4 py-3">
+                              {(() => {
+                                const v = file.detection_signals?.vulnerabilities as VulnResult | undefined
+                                if (!v || v.total_findings === 0) return <span className="text-xs text-[#5a6480]">--</span>
+                                const color = v.critical_count > 0 ? "text-red-400" : v.high_count > 0 ? "text-orange-400" : v.medium_count > 0 ? "text-amber-400" : "text-blue-400"
+                                return <span className={`font-mono text-xs font-semibold ${color}`}>{v.total_findings}</span>
+                              })()}
+                            </td>
                           </tr>
                           {isExpanded && (
                             <tr>
-                              <td colSpan={7} className="p-0">
+                              <td colSpan={8} className="p-0">
                                 <DetectionSignalPanel signals={file.detection_signals} />
                               </td>
                             </tr>
@@ -758,7 +985,10 @@ export default function RepositoryDetailPage() {
                   ai_loc_percentage?: number
                   debt_score?: number
                   risk_zone?: string
+                  commit_sha?: string
+                  vulnerabilities?: { total?: number; critical?: number; high?: number }
                 } | null
+                const scanCommit = scan.commit_sha || summary?.commit_sha || null
 
                 const scoreColor =
                   summary?.risk_zone === "critical"
@@ -786,9 +1016,23 @@ export default function RepositoryDetailPage() {
                         <p className="text-sm font-medium capitalize text-white">
                           {scan.status}
                         </p>
-                        <p className="text-xs text-[#8892b0]">
-                          {formatRelativeTime(scan.created_at)}
-                        </p>
+                        <div className="flex items-center gap-2 text-xs text-[#8892b0]">
+                          <span>{formatRelativeTime(scan.created_at)}</span>
+                          {scanCommit && (
+                            <>
+                              <span>&middot;</span>
+                              <a
+                                href={`https://github.com/${repo.full_name}/commit/${scanCommit}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-blue-400 hover:text-blue-300"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {scanCommit.slice(0, 7)}
+                              </a>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-6">
@@ -818,6 +1062,14 @@ export default function RepositoryDetailPage() {
                             </p>
                             <p className="text-xs text-[#8892b0]">Score</p>
                           </div>
+                          {summary.vulnerabilities && (summary.vulnerabilities.total ?? 0) > 0 && (
+                            <div className="text-right">
+                              <p className="font-mono text-sm font-semibold text-red-400">
+                                {summary.vulnerabilities.total}
+                              </p>
+                              <p className="text-xs text-[#8892b0]">Vulns</p>
+                            </div>
+                          )}
                         </>
                       ) : (
                         <Badge

@@ -33,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       .limit(1),
     supabase
       .from('scans')
-      .select('id, status, created_at, completed_at, summary')
+      .select('id, status, created_at, completed_at, summary, commit_sha')
       .eq('repository_id', id)
       .order('created_at', { ascending: false })
       .limit(10),
@@ -94,6 +94,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         created_at: s.created_at,
         completed_at: s.completed_at,
         summary: s.summary as Record<string, unknown> | null,
+        commit_sha: s.commit_sha ?? null,
       })),
       score_trend: (scoreTrendRes.data || []).reverse().map((s) => ({
         date: s.calculated_at,
@@ -104,6 +105,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         files_scanned: filesScanned,
         ai_files_detected: aiFilesDetected,
         active_alerts: alertsRes.data?.length ?? 0,
+        vulnerabilities: (() => {
+          const s = latestCompletedScan?.summary as Record<string, unknown> | null;
+          const v = s?.vulnerabilities as { critical?: number; high?: number; medium?: number; low?: number; total?: number } | undefined;
+          if (!v) return null;
+          return { critical: v.critical ?? 0, high: v.high ?? 0, medium: v.medium ?? 0, low: v.low ?? 0, total: v.total ?? 0 };
+        })(),
       },
     },
   });

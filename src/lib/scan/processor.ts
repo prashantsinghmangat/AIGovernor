@@ -2,6 +2,7 @@ import { createAdminSupabase } from '@/lib/supabase/admin';
 import { createGitHubClient } from '@/lib/github/client';
 import { decrypt } from '@/lib/utils/encryption';
 import { detectAICode } from '@/lib/detection/combined-scorer';
+import { detectVulnerabilities } from '@/lib/detection/vulnerability-detector';
 import { calculateAIDebtScore } from '@/lib/scoring/ai-debt-score';
 import type { Json } from '@/types/database';
 
@@ -12,8 +13,7 @@ const CODE_EXTENSIONS = new Set([
   'vue', 'svelte', 'dart', 'lua', 'sh', 'bash', 'sql',
 ]);
 
-const MAX_FILES = 100;
-const MAX_FILE_SIZE = 50000;
+const MAX_FILE_SIZE = 50000; // 50KB per file
 
 function getLanguageFromExt(ext: string): string {
   const map: Record<string, string> = {
@@ -116,8 +116,9 @@ export async function processPendingScan(): Promise<{
     const octokit = createGitHubClient(token);
     const [owner, repoName] = repo.full_name.split('/');
 
-    // 3. Get recent commits for metadata detection
+    // 3. Get recent commits for metadata detection + HEAD commit SHA
     let latestCommitMessage = '';
+    let commitSha: string | null = null;
     try {
       const { data: commits } = await octokit.repos.listCommits({
         owner,
@@ -125,8 +126,16 @@ export async function processPendingScan(): Promise<{
         per_page: 5,
       });
       latestCommitMessage = commits.map(c => c.commit.message).join('\n');
+      if (commits.length > 0) {
+        commitSha = commits[0].sha;
+      }
     } catch {
       console.log(`[Scan Processor] Could not fetch commits for ${repo.full_name} (may be empty)`);
+    }
+
+    // Store commit SHA on the scan record
+    if (commitSha) {
+      await admin.from('scans').update({ commit_sha: commitSha }).eq('id', scanId);
     }
 
     // 4. Get the file tree from the default branch
@@ -138,15 +147,14 @@ export async function processPendingScan(): Promise<{
         tree_sha: repo.default_branch,
         recursive: 'true',
       });
-      tree = (treeData.tree || [])
-        .filter((item): item is typeof item & { path: string; size: number } =>
+      tree = (treeData.tree || []).filter(
+        (item): item is typeof item & { path: string; size: number } =>
           item.type === 'blob' &&
           !!item.path &&
           typeof item.size === 'number' &&
           item.size <= MAX_FILE_SIZE &&
           CODE_EXTENSIONS.has(getFileExtension(item.path!))
-        )
-        .slice(0, MAX_FILES);
+      );
     } catch (err) {
       throw new Error(`Failed to fetch file tree: ${err instanceof Error ? err.message : 'unknown'}`);
     }
@@ -189,6 +197,10 @@ export async function processPendingScan(): Promise<{
 
     let totalLoc = 0;
     let totalAiLoc = 0;
+    let totalVulnCritical = 0;
+    let totalVulnHigh = 0;
+    let totalVulnMedium = 0;
+    let totalVulnLow = 0;
 
     for (let i = 0; i < tree.length; i++) {
       const file = tree[i];
@@ -208,10 +220,15 @@ export async function processPendingScan(): Promise<{
           const loc = content.split('\n').length;
 
           const detection = await detectAICode(content, language, latestCommitMessage);
+          const vulnerabilities = detectVulnerabilities(content, language);
 
           const aiLoc = Math.round(loc * detection.combined_probability);
           totalLoc += loc;
           totalAiLoc += aiLoc;
+          totalVulnCritical += vulnerabilities.critical_count;
+          totalVulnHigh += vulnerabilities.high_count;
+          totalVulnMedium += vulnerabilities.medium_count;
+          totalVulnLow += vulnerabilities.low_count;
 
           scanResults.push({
             scan_id: scanId,
@@ -228,6 +245,7 @@ export async function processPendingScan(): Promise<{
               metadata: detection.metadata,
               style: detection.style,
               ml: detection.ml,
+              vulnerabilities,
             })) as Json,
           });
         }
@@ -356,11 +374,37 @@ export async function processPendingScan(): Promise<{
       });
     }
 
+    // Vulnerability alerts
+    if (totalVulnCritical > 0) {
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'high',
+        category: 'vulnerability',
+        title: `Critical vulnerabilities found in ${repo.full_name}`,
+        description: `${totalVulnCritical} critical vulnerability finding${totalVulnCritical > 1 ? 's' : ''} detected (hardcoded secrets, code injection). Immediate remediation required.`,
+        status: 'active',
+      });
+    }
+
+    if (totalVulnHigh > 0) {
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'high',
+        category: 'vulnerability',
+        title: `High-severity vulnerabilities in ${repo.full_name}`,
+        description: `${totalVulnHigh} high-severity finding${totalVulnHigh > 1 ? 's' : ''} detected (XSS, command injection). Review and fix recommended.`,
+        status: 'active',
+      });
+    }
+
     if (alertInserts.length > 0) {
       await admin.from('alerts').insert(alertInserts);
     }
 
     // 9. Update scan as completed
+    const totalVulns = totalVulnCritical + totalVulnHigh + totalVulnMedium + totalVulnLow;
     const summary = {
       total_files_scanned: scanResults.length,
       ai_files_detected: aiFilesDetected,
@@ -369,6 +413,14 @@ export async function processPendingScan(): Promise<{
       ai_loc_percentage: aiLocPct,
       debt_score: debtScore.score,
       risk_zone: debtScore.risk_zone,
+      commit_sha: commitSha,
+      vulnerabilities: {
+        critical: totalVulnCritical,
+        high: totalVulnHigh,
+        medium: totalVulnMedium,
+        low: totalVulnLow,
+        total: totalVulns,
+      },
     };
 
     await admin.from('scans').update({

@@ -40,7 +40,9 @@
       "Bash(grep -r \"ML_SERVICE\\\\|external\\\\|third.party\" /d/Project/AIGovernor/.env*)",
       "Bash(ls -la \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\")",
       "Bash(cat \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\\\\[id\\\\]/page.tsx\")",
-      "Bash(xargs ls -la)"
+      "Bash(xargs ls -la)",
+      "Bash(grep -n \"github_username\\\\|avatar\\\\|owner\\\\|user\\\\|full_name\" /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
+      "Bash(grep -n \"header\\\\|title\\\\|Header\\\\|Title\" /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)"
     ]
   }
 }

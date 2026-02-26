@@ -47,21 +47,26 @@ export async function GET() {
     }
   });
 
-  const latestScans = new Map<string, { status: string; completed_at: string | null; summary: unknown }>();
+  const latestScans = new Map<string, { status: string; completed_at: string | null; summary: Record<string, unknown> | null }>();
   scansRes.data?.forEach((s) => {
     if (!latestScans.has(s.repository_id)) {
-      latestScans.set(s.repository_id, { status: s.status, completed_at: s.completed_at, summary: s.summary });
+      latestScans.set(s.repository_id, { status: s.status, completed_at: s.completed_at, summary: s.summary as Record<string, unknown> | null });
     }
   });
 
   // Enrich repositories with score and scan data
-  const enriched = repoList.map((repo) => ({
-    ...repo,
-    debt_score: latestScores.get(repo.id)?.score ?? null,
-    risk_zone: latestScores.get(repo.id)?.risk_zone ?? null,
-    latest_scan_status: latestScans.get(repo.id)?.status ?? repo.last_scan_status,
-    latest_scan_at: latestScans.get(repo.id)?.completed_at ?? repo.last_scan_at,
-  }));
+  const enriched = repoList.map((repo) => {
+    const scanData = latestScans.get(repo.id);
+    const vulnSummary = (scanData?.summary?.vulnerabilities ?? null) as { critical?: number; high?: number; medium?: number; low?: number; total?: number } | null;
+    return {
+      ...repo,
+      debt_score: latestScores.get(repo.id)?.score ?? null,
+      risk_zone: latestScores.get(repo.id)?.risk_zone ?? null,
+      latest_scan_status: scanData?.status ?? repo.last_scan_status,
+      latest_scan_at: scanData?.completed_at ?? repo.last_scan_at,
+      vulnerabilities: vulnSummary,
+    };
+  });
 
   return NextResponse.json({ data: { repositories: enriched } });
 }

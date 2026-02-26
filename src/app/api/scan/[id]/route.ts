@@ -23,6 +23,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       status: scan.status,
       progress: scan.progress,
       summary: scan.summary,
+      commit_sha: scan.commit_sha,
       started_at: scan.started_at,
       completed_at: scan.completed_at,
       error_message: scan.error_message,
