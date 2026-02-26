@@ -1,5 +1,6 @@
 import { createAdminSupabase } from '@/lib/supabase/admin';
 import { createGitHubClient } from '@/lib/github/client';
+import { analyzeContributors, deriveTeamMetrics } from '@/lib/github/contributors';
 import { decrypt } from '@/lib/utils/encryption';
 import { detectAICode } from '@/lib/detection/combined-scorer';
 import { detectVulnerabilities } from '@/lib/detection/vulnerability-detector';
@@ -514,6 +515,70 @@ export async function processPendingScan(): Promise<{
       last_scan_at: new Date().toISOString(),
       last_scan_status: 'completed',
     }).eq('id', repo.id);
+
+    // 11. Analyze contributors from Git history and update team metrics
+    try {
+      const contributors = await analyzeContributors(
+        octokit,
+        owner,
+        repoName,
+        repo.default_branch,
+        scanResults.map((r) => ({
+          file_path: r.file_path,
+          ai_probability: r.ai_probability,
+          ai_loc: r.ai_loc,
+          total_loc: r.total_loc,
+        })),
+      );
+
+      if (contributors.length > 0) {
+        const now = new Date();
+        // Current week: Monday to Sunday
+        const dayOfWeek = now.getDay();
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() + mondayOffset);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+
+        const periodStart = weekStart.toISOString().split('T')[0];
+        const periodEnd = weekEnd.toISOString().split('T')[0];
+
+        for (const contrib of contributors) {
+          const metrics = deriveTeamMetrics(contrib);
+
+          await admin.from('team_metrics').upsert(
+            {
+              company_id: repo.company_id,
+              github_username: contrib.github_username,
+              display_name: contrib.display_name,
+              avatar_url: contrib.avatar_url,
+              period_start: periodStart,
+              period_end: periodEnd,
+              ai_usage_level: metrics.ai_usage_level,
+              ai_loc_authored: contrib.ai_loc_attributed,
+              ai_prs: contrib.total_commits,
+              total_prs: contrib.total_commits,
+              prs_reviewed: 0,
+              review_quality: metrics.review_quality,
+              governance_score: metrics.governance_score,
+              risk_index: metrics.risk_index,
+              coaching_suggestions: metrics.coaching_suggestions as unknown as Json,
+            },
+            { onConflict: 'company_id,github_username,period_start,period_end' },
+          );
+        }
+
+        console.log(
+          `[Scan Processor] Updated team metrics for ${contributors.length} contributors`,
+        );
+      }
+    } catch (contribErr) {
+      console.log(
+        `[Scan Processor] Contributor analysis skipped:`,
+        contribErr instanceof Error ? contribErr.message : 'unknown',
+      );
+    }
 
     console.log(`[Scan Processor] Completed scan ${scanId} — ${scanResults.length} files, score: ${debtScore.score}`);
 
