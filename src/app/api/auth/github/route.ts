@@ -16,9 +16,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log('[GitHub Callback] Exchanging code for token...');
+    console.log('[GitHub Callback] Exchanging code...');
     const token = await exchangeCodeForToken(code);
-    console.log('[GitHub Callback] Token received:', token ? 'yes' : 'EMPTY');
+    console.log('[GitHub Callback] OAuth exchange:', token ? 'success' : 'EMPTY');
 
     const supabase = await createServerSupabase();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
