@@ -24,6 +24,7 @@ node_modules/
 
 # Supabase
 supabase/.temp/
+supabase/.branches/
 
 # Environment variables
 .env
@@ -34,12 +35,15 @@ supabase/.temp/
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # Debug logs
 npm-debug.log*
@@ -54,5 +58,10 @@ next-env.d.ts
 # Testing
 /coverage
 
+# Claude Code
+.claude/
+
 # Misc
 *.pem
+*.key
+*.cert

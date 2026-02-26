@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CodeGuard AI
+
+B2B SaaS platform for AI code governance. Helps engineering teams track, score, and manage AI-generated technical debt across repositories.
+
+## Features
+
+- **AI Debt Scoring** — Calculates a 0–100 governance score per repository based on AI-generated code ratio, review coverage, and refactor backlog
+- **Repository Scanning** — Scans all code files in connected GitHub repos to detect AI-generated patterns using style analysis and metadata detection
+- **Vulnerability Detection** — Regex-based security scanner with 20 rules across 4 severity levels (hardcoded secrets, XSS, SQL injection, command injection, weak crypto)
+- **Governance Dashboard** — Company-wide overview with debt score gauge, metric cards, score trends, risk heatmap, and alert feed
+- **Repository Detail View** — Per-repo drill-down with file-level AI detection signals, vulnerability findings, scan history with commit tracking
+- **Alerting System** — Automated alerts for high AI code ratios, critical debt scores, and security vulnerabilities
+- **GitHub Integration** — OAuth-based connection, automatic file tree fetching, commit SHA tracking per scan
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router, Turbopack) |
+| Language | TypeScript 5 |
+| Database | Supabase (PostgreSQL) with Row Level Security |
+| Auth | Supabase Auth + GitHub OAuth |
+| Styling | Tailwind CSS v4 + shadcn/ui (Radix) |
+| State | Zustand (client) + TanStack React Query (server) |
+| Charts | Recharts |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- Docker (for local Supabase)
+
+### Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+npm install
+
+# Start local Supabase
+npx supabase start
+
+# Run all migrations
+npx supabase db reset
+
+# Copy environment template and fill in values
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (local: `http://127.0.0.1:54321`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
+| `GITHUB_CLIENT_ID` | GitHub OAuth App client ID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret |
+| `ENCRYPTION_KEY` | 64-char hex string for token encryption |
+| `NEXT_PUBLIC_APP_URL` | App URL (local: `http://localhost:3000`) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Generate an encryption key:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
-## Learn More
+### Development
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev          # Start dev server (http://localhost:3000)
+npm run build        # Production build
+npm run lint         # ESLint
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Database
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npx supabase start   # Start local Supabase (Docker)
+npx supabase stop    # Stop containers
+npx supabase db reset # Re-run all 20 migrations
+```
 
-## Deploy on Vercel
+Local Supabase Studio: http://localhost:54323
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── (public)/          # Landing pages (no auth)
+│   ├── (auth)/            # Login, signup, onboarding
+│   ├── (dashboard)/       # Dashboard pages (auth required)
+│   │   └── dashboard/
+│   │       ├── page.tsx           # Governance dashboard
+│   │       ├── repositories/     # Repo list + detail
+│   │       ├── alerts/           # Alert management
+│   │       └── ...
+│   └── api/               # API routes
+│       ├── auth/github/   # GitHub OAuth callback
+│       ├── dashboard/     # Dashboard data
+│       ├── repositories/  # Repo CRUD + enrichment
+│       ├── scan/          # Scan trigger + status + results
+│       └── scores/        # AI debt scores
+├── components/
+│   ├── ui/                # shadcn primitives
+│   ├── charts/            # Recharts wrappers
+│   └── dashboard/         # Dashboard-specific components
+├── hooks/                 # React Query hooks
+├── lib/
+│   ├── detection/         # AI code detection + vulnerability scanner
+│   ├── scoring/           # AI debt score calculator
+│   ├── github/            # GitHub API client
+│   └── supabase/          # Supabase clients (server, admin)
+├── stores/                # Zustand stores
+└── types/                 # TypeScript types
+```
+
+## How Scanning Works
+
+1. User triggers a scan from the repository detail page
+2. Scan is queued in the database with `status: pending`
+3. Processor claims the scan, fetches the file tree from GitHub
+4. Each code file is analyzed for AI-generated patterns (style analysis, metadata detection)
+5. Vulnerability detection runs 20 regex-based rules per file
+6. Results are stored per-file with detection signals and vulnerability findings
+7. AI debt score is calculated and alerts are generated for threshold violations
+8. Scan is marked complete with commit SHA tracking
+
+## License
+
+Proprietary — All rights reserved.

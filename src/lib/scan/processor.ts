@@ -119,6 +119,8 @@ export async function processPendingScan(): Promise<{
     // 3. Get recent commits for metadata detection + HEAD commit SHA
     let latestCommitMessage = '';
     let commitSha: string | null = null;
+    let commitTitle: string | null = null;
+    let commitDate: string | null = null;
     try {
       const { data: commits } = await octokit.repos.listCommits({
         owner,
@@ -128,14 +130,23 @@ export async function processPendingScan(): Promise<{
       latestCommitMessage = commits.map(c => c.commit.message).join('\n');
       if (commits.length > 0) {
         commitSha = commits[0].sha;
+        commitTitle = commits[0].commit.message.split('\n')[0].slice(0, 120);
+        commitDate = commits[0].commit.committer?.date ?? commits[0].commit.author?.date ?? null;
       }
     } catch {
       console.log(`[Scan Processor] Could not fetch commits for ${repo.full_name} (may be empty)`);
     }
 
-    // Store commit SHA on the scan record
+    // Store commit info on the scan record so the UI can show it during progress
     if (commitSha) {
-      await admin.from('scans').update({ commit_sha: commitSha }).eq('id', scanId);
+      await admin.from('scans').update({
+        commit_sha: commitSha,
+        summary: {
+          commit_sha: commitSha,
+          commit_title: commitTitle,
+          commit_date: commitDate,
+        } as unknown as Json,
+      }).eq('id', scanId);
     }
 
     // 4. Get the file tree from the default branch
@@ -427,6 +438,8 @@ export async function processPendingScan(): Promise<{
       debt_score: debtScore.score,
       risk_zone: debtScore.risk_zone,
       commit_sha: commitSha,
+      commit_title: commitTitle,
+      commit_date: commitDate,
       vulnerabilities: {
         critical: totalVulnCritical,
         high: totalVulnHigh,

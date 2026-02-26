@@ -445,29 +445,58 @@ export default function RepositoryDetailPage() {
       </div>
 
       {/* Scan progress indicator */}
-      {isScanning && (
-        <Card className="border-blue-500/20 bg-blue-500/5">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-3 mb-2">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-              <span className="text-sm font-medium text-blue-300">
-                Scanning {repo.full_name}...
-              </span>
-              <span className="ml-auto font-mono text-sm text-blue-400">{scanProgress}%</span>
-            </div>
-            <Progress value={scanProgress} className="h-2" />
-            <p className="text-xs text-blue-300/60 mt-2">
-              {scanProgress < 10
-                ? "Initializing scan..."
-                : scanProgress < 80
-                ? "Analyzing files..."
-                : scanProgress < 90
-                ? "Calculating scores..."
-                : "Finalizing..."}
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {isScanning && (() => {
+        const scanCommitInfo = scanStatus?.data?.summary as {
+          commit_sha?: string
+          commit_title?: string
+          commit_date?: string
+        } | null
+        return (
+          <Card className="border-blue-500/20 bg-blue-500/5">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3 mb-2">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                <span className="text-sm font-medium text-blue-300">
+                  Scanning {repo.full_name}...
+                </span>
+                <span className="ml-auto font-mono text-sm text-blue-400">{scanProgress}%</span>
+              </div>
+              <Progress value={scanProgress} className="h-2" />
+              <p className="text-xs text-blue-300/60 mt-2">
+                {scanProgress < 10
+                  ? "Initializing scan..."
+                  : scanProgress < 80
+                  ? "Analyzing files..."
+                  : scanProgress < 90
+                  ? "Calculating scores..."
+                  : "Finalizing..."}
+              </p>
+              {scanCommitInfo?.commit_sha && (
+                <div className="mt-3 flex items-center gap-2 rounded bg-[#0a0e1a] px-3 py-2 text-xs text-[#8892b0]">
+                  <GitBranch className="h-3 w-3 text-blue-400 shrink-0" />
+                  <a
+                    href={`https://github.com/${repo.full_name}/commit/${scanCommitInfo.commit_sha}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-blue-400 hover:text-blue-300 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {scanCommitInfo.commit_sha.slice(0, 7)}
+                  </a>
+                  {scanCommitInfo.commit_title && (
+                    <span className="truncate">{scanCommitInfo.commit_title}</span>
+                  )}
+                  {scanCommitInfo.commit_date && (
+                    <span className="ml-auto shrink-0 text-[#5a6480]">
+                      {formatRelativeTime(scanCommitInfo.commit_date)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* Score overview */}
       {!latest_score ? (
