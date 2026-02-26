@@ -75,3 +75,90 @@ export interface ScoreData {
     review_coverage: number;
   }>;
 }
+
+// GitHub connection status
+export interface GitHubStatusData {
+  connected: boolean;
+  github_username: string | null;
+}
+
+// Enriched repository for list view (includes latest score/scan data)
+export interface RepositoryWithStats {
+  id: string;
+  company_id: string;
+  github_id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  default_branch: string;
+  language: string | null;
+  is_private: boolean;
+  is_active: boolean;
+  last_scan_at: string | null;
+  last_scan_status: string | null;
+  metadata: unknown;
+  created_at: string;
+  updated_at: string;
+  // Enriched from joins
+  debt_score: number | null;
+  risk_zone: string | null;
+}
+
+// Full repository detail response
+export interface RepositoryDetail {
+  repository: {
+    id: string;
+    company_id: string;
+    github_id: number;
+    name: string;
+    full_name: string;
+    description: string | null;
+    default_branch: string;
+    language: string | null;
+    is_private: boolean;
+    is_active: boolean;
+    last_scan_at: string | null;
+    last_scan_status: string | null;
+    created_at: string;
+    updated_at: string;
+  };
+  latest_score: {
+    score: number;
+    risk_zone: string;
+    breakdown: Record<string, number>;
+    calculated_at: string;
+  } | null;
+  latest_scan: {
+    id: string;
+    status: string;
+    summary: Record<string, unknown> | null;
+    completed_at: string | null;
+  } | null;
+  scan_history: Array<{
+    id: string;
+    status: string;
+    created_at: string;
+    completed_at: string | null;
+    summary: Record<string, unknown> | null;
+  }>;
+  score_trend: Array<{
+    date: string;
+    score: number;
+    risk_zone: string;
+  }>;
+  stats: {
+    files_scanned: number;
+    ai_files_detected: number;
+    active_alerts: number;
+  };
+}
+
+// GitHub repo shape from /api/github/repos
+export interface GitHubRepoItem {
+  github_id: number;
+  name: string;
+  full_name: string;
+  default_branch: string;
+  language: string | null;
+  is_private: boolean;
+}

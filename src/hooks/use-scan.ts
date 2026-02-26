@@ -18,9 +18,13 @@ export function useTriggerScan() {
       if (!res.ok) throw new Error('Failed to trigger scan');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['scores'] });
       queryClient.invalidateQueries({ queryKey: ['repositories'] });
+      if (variables.repository_id) {
+        queryClient.invalidateQueries({ queryKey: ['repository', variables.repository_id] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

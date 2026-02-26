@@ -34,7 +34,12 @@
       "Bash(taskkill //F //IM node.exe)",
       "Bash(node -e \"console.log\\(require\\(''crypto''\\).randomBytes\\(32\\).toString\\(''hex''\\)\\)\")",
       "Bash(grep -n \"repositories\" \"d:/Project/GovernAi/codeguard-ai/supabase/migrations/\"*.sql)",
-      "Bash(grep -n \"is_company_admin\\\\|get_user_company_id\" \"d:/Project/GovernAi/codeguard-ai/supabase/migrations/\"*.sql)"
+      "Bash(grep -n \"is_company_admin\\\\|get_user_company_id\" \"d:/Project/GovernAi/codeguard-ai/supabase/migrations/\"*.sql)",
+      "Bash(ls -la \"d:/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\")",
+      "Bash(ls -la \"d:/Project/AIGovernor/src/app/\\(auth\\)/\")",
+      "Bash(grep -r \"ML_SERVICE\\\\|external\\\\|third.party\" /d/Project/AIGovernor/.env*)",
+      "Bash(ls -la \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\")",
+      "Bash(cat \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\\\\[id\\\\]/page.tsx\")"
     ]
   }
 }

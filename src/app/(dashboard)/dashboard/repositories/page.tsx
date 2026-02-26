@@ -1,28 +1,120 @@
 'use client';
 
+import { useState } from 'react';
+import { useRepositories } from '@/hooks/use-repositories';
+import { useGitHubStatus } from '@/hooks/use-github-status';
 import { RepoRiskCard } from '@/components/dashboard/repo-risk-card';
+import { GitHubStatusBanner } from '@/components/dashboard/github-status-banner';
+import { AddReposDialog } from '@/components/dashboard/add-repos-dialog';
+import { UnlinkRepoDialog } from '@/components/dashboard/unlink-repo-dialog';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Plus, GitBranch } from 'lucide-react';
 
-const repos = [
-  { name: 'auth-api', riskZone: 'critical' as const, debtScore: 42, aiLocPercentage: 52, reviewCoverage: 48, lastScan: '2 hours ago' },
-  { name: 'frontend', riskZone: 'caution' as const, debtScore: 65, aiLocPercentage: 38, reviewCoverage: 65, lastScan: '2 hours ago' },
-  { name: 'payments', riskZone: 'caution' as const, debtScore: 78, aiLocPercentage: 25, reviewCoverage: 80, lastScan: '3 hours ago' },
-  { name: 'data-pipeline', riskZone: 'critical' as const, debtScore: 55, aiLocPercentage: 48, reviewCoverage: 40, lastScan: '3 hours ago' },
-  { name: 'notifications', riskZone: 'caution' as const, debtScore: 70, aiLocPercentage: 30, reviewCoverage: 70, lastScan: '4 hours ago' },
-  { name: 'admin-panel', riskZone: 'critical' as const, debtScore: 35, aiLocPercentage: 62, reviewCoverage: 30, lastScan: '4 hours ago' },
-];
+interface EnrichedRepo {
+  id: string;
+  name: string;
+  full_name: string;
+  github_id: number;
+  language: string | null;
+  default_branch: string;
+  is_private: boolean;
+  debt_score: number | null;
+  risk_zone: string | null;
+  last_scan_at: string | null;
+  latest_scan_at: string | null;
+}
 
 export default function RepositoriesPage() {
+  const { data, isLoading } = useRepositories();
+  const { data: githubStatus } = useGitHubStatus();
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [unlinkTarget, setUnlinkTarget] = useState<{ id: string; full_name: string } | null>(null);
+
+  const repositories: EnrichedRepo[] = data?.repositories ?? [];
+  const existingGithubIds = repositories.map((r) => r.github_id);
+
+  const handleUnlink = (id: string, fullName: string) => {
+    setUnlinkTarget({ id, full_name: fullName });
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold text-white">Repository Risk</h1>
-        <p className="text-sm text-[#8892b0] mt-1">AI governance risk overview by repository</p>
+      {/* GitHub connection status */}
+      <GitHubStatusBanner />
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-white">Repository Risk</h1>
+          <p className="text-sm text-[#8892b0] mt-1">
+            {repositories.length > 0
+              ? `${repositories.length} ${repositories.length === 1 ? 'repository' : 'repositories'} monitored`
+              : 'AI governance risk overview by repository'}
+          </p>
+        </div>
+        {githubStatus?.connected && (
+          <Button onClick={() => setAddDialogOpen(true)} size="sm" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Repositories
+          </Button>
+        )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {repos.map((repo) => (
-          <RepoRiskCard key={repo.name} {...repo} />
-        ))}
-      </div>
+
+      {/* Repository grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-lg" />
+          ))}
+        </div>
+      ) : repositories.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#1e2a4a] bg-[#131b2e]/50 py-16">
+          <GitBranch className="h-12 w-12 text-[#5a6480] mb-4" />
+          <h3 className="text-lg font-semibold text-white mb-2">No repositories connected</h3>
+          <p className="text-sm text-[#8892b0] mb-6 text-center max-w-md">
+            {githubStatus?.connected
+              ? 'Add repositories from your GitHub account to start monitoring AI-generated code and governance metrics.'
+              : 'Connect your GitHub account first, then add repositories to monitor.'}
+          </p>
+          {githubStatus?.connected && (
+            <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add Repositories
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {repositories.map((repo) => (
+            <RepoRiskCard
+              key={repo.id}
+              id={repo.id}
+              name={repo.name}
+              fullName={repo.full_name}
+              language={repo.language}
+              defaultBranch={repo.default_branch}
+              isPrivate={repo.is_private}
+              riskZone={repo.risk_zone}
+              debtScore={repo.debt_score}
+              lastScanAt={repo.latest_scan_at ?? repo.last_scan_at}
+              onUnlink={handleUnlink}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Dialogs */}
+      <AddReposDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        existingGithubIds={existingGithubIds}
+      />
+      <UnlinkRepoDialog
+        open={!!unlinkTarget}
+        onOpenChange={(open) => { if (!open) setUnlinkTarget(null); }}
+        repository={unlinkTarget}
+      />
     </div>
   );
 }

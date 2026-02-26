@@ -17,14 +17,48 @@ export async function GET() {
 
     const companyId = profile.company_id;
 
-    const [scoresRes, alertsRes, reposRes] = await Promise.all([
+    const [scoresRes, alertsRes, reposRes, latestScanRes, repoScoresRes] = await Promise.all([
       supabase.from('ai_debt_scores').select('*').eq('company_id', companyId).is('repository_id', null).order('calculated_at', { ascending: false }).limit(6),
       supabase.from('alerts').select('id, severity, title, created_at').eq('company_id', companyId).eq('status', 'active').order('created_at', { ascending: false }).limit(4),
-      supabase.from('repositories').select('id').eq('company_id', companyId).eq('is_active', true),
+      supabase.from('repositories').select('id, name').eq('company_id', companyId).eq('is_active', true),
+      supabase.from('scans').select('completed_at').eq('company_id', companyId).eq('status', 'completed').order('completed_at', { ascending: false }).limit(1),
+      supabase.from('ai_debt_scores').select('repository_id, score, risk_zone, calculated_at').eq('company_id', companyId).not('repository_id', 'is', null).order('calculated_at', { ascending: false }),
     ]);
 
     const latestScore = scoresRes.data?.[0];
     const previousScore = scoresRes.data?.[1];
+    const latestScan = latestScanRes.data?.[0];
+
+    // Build per-repo risk data from latest scores
+    const latestRepoScores = new Map<string, { score: number; risk_zone: string }>();
+    repoScoresRes.data?.forEach((s) => {
+      if (s.repository_id && !latestRepoScores.has(s.repository_id)) {
+        latestRepoScores.set(s.repository_id, { score: s.score, risk_zone: s.risk_zone });
+      }
+    });
+
+    const repoRisk = (reposRes.data || []).map((r) => {
+      const scoreData = latestRepoScores.get(r.id);
+      return {
+        repo: r.name,
+        risk_score: scoreData?.score ?? 0,
+        risk_level: scoreData?.risk_zone ?? 'unknown',
+      };
+    }).filter((r) => r.risk_score > 0);
+
+    // Compute last scan relative time
+    let lastScanText = 'No scans yet';
+    if (latestScan?.completed_at) {
+      const diff = Date.now() - new Date(latestScan.completed_at).getTime();
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      if (days > 0) lastScanText = `${days} day${days > 1 ? 's' : ''} ago`;
+      else if (hours > 0) lastScanText = `${hours} hour${hours > 1 ? 's' : ''} ago`;
+      else lastScanText = 'Just now';
+    }
+
+    // Extract metrics from latest company-wide score breakdown if available
+    const breakdown = (latestScore?.breakdown ?? {}) as Record<string, number>;
 
     return NextResponse.json({
       data: {
@@ -38,28 +72,25 @@ export async function GET() {
           })),
         },
         metrics: {
-          ai_loc_percentage: 42,
-          ai_loc_change: '+4.2%',
-          review_coverage: 61,
-          review_change: '+2.3%',
-          unreviewed_merges: 6,
-          unreviewed_change: '+2',
-          refactor_backlog_growth: 12,
+          ai_loc_percentage: breakdown.ai_loc_ratio != null ? Math.round(breakdown.ai_loc_ratio * 100) : 0,
+          ai_loc_change: latestScore && previousScore
+            ? `${latestScore.score - previousScore.score >= 0 ? '+' : ''}${latestScore.score - previousScore.score}%`
+            : '--',
+          review_coverage: breakdown.review_coverage != null ? Math.round(breakdown.review_coverage * 100) : 0,
+          review_change: '--',
+          unreviewed_merges: 0,
+          unreviewed_change: '--',
+          refactor_backlog_growth: breakdown.refactor_backlog_growth ?? 0,
         },
-        ai_usage_trend: [
-          { week: 'W1', ai_loc: 2400, human_loc: 5600 },
-          { week: 'W2', ai_loc: 2800, human_loc: 5200 },
-          { week: 'W3', ai_loc: 3200, human_loc: 4800 },
-          { week: 'W4', ai_loc: 3600, human_loc: 4400 },
-        ],
-        repo_risk: [],
+        ai_usage_trend: [] as Array<{ week: string; ai_loc: number; human_loc: number }>,
+        repo_risk: repoRisk,
         recent_alerts: (alertsRes.data || []).map((a) => ({
           id: a.id,
           severity: a.severity,
           title: a.title,
           time: a.created_at,
         })),
-        last_scan: '2 hours ago',
+        last_scan: lastScanText,
         repos_monitored: reposRes.data?.length ?? 0,
       },
     });
