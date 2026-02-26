@@ -1,0 +1,24 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "npm install",
+  "regions": ["bom1"],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/refresh-views",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "0 2 * * 1"
+    }
+  ]
+}
