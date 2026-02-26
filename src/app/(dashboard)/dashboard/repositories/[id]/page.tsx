@@ -32,6 +32,7 @@ import {
   ChevronDown,
   Eye,
   Github,
+  PackageIcon,
 } from "lucide-react"
 import { useRepository } from "@/hooks/use-repository"
 import { useGitHubStatus } from "@/hooks/use-github-status"
@@ -136,6 +137,30 @@ interface VulnResult {
   low_count: number
   findings: VulnFinding[]
   scanned: boolean
+}
+
+interface DepVulnFinding {
+  id: string
+  package_name: string
+  installed_version: string
+  severity: string
+  title: string
+  description: string
+  vulnerable_range: string
+  patched_version: string | null
+  cve?: string
+  ghsa?: string
+  url?: string
+}
+
+interface DepVulnSummary {
+  total_dependencies: number
+  critical: number
+  high: number
+  medium: number
+  low: number
+  total: number
+  findings: DepVulnFinding[]
 }
 
 function DetectionSignalPanel({ signals }: { signals: Record<string, unknown> }) {
@@ -362,6 +387,10 @@ export default function RepositoryDetailPage() {
   const latestScanCommit = latestCompletedScan?.commit_sha
     || (latestCompletedScan?.summary as { commit_sha?: string } | null)?.commit_sha
     || null
+
+  // Extract dependency vulnerability data from latest scan summary
+  const depVulns = (latestCompletedScan?.summary as { dependency_vulnerabilities?: DepVulnSummary } | null)
+    ?.dependency_vulnerabilities ?? null
 
   const riskZone = latest_score?.risk_zone
   const riskBadgeVariant =
@@ -678,6 +707,79 @@ export default function RepositoryDetailPage() {
         </Card>
       )}
 
+      {/* Dependency Vulnerabilities */}
+      {depVulns && depVulns.total > 0 && (
+        <Card className="border-orange-500/20 bg-[#131b2e]">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <PackageIcon className="h-4 w-4 text-orange-400" />
+              <CardTitle className="text-sm text-orange-300">Dependency Vulnerabilities</CardTitle>
+              <Badge className="ml-auto text-xs bg-orange-500/20 text-orange-300 border-0">
+                {depVulns.total} package{depVulns.total > 1 ? "s" : ""}
+              </Badge>
+            </div>
+            <CardDescription className="text-[#5a6480]">
+              Known vulnerable packages found in package.json ({depVulns.total_dependencies} dependencies scanned)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-red-400">{depVulns.critical}</p>
+                <p className="text-xs text-[#8892b0]">Critical</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-orange-400">{depVulns.high}</p>
+                <p className="text-xs text-[#8892b0]">High</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-amber-400">{depVulns.medium}</p>
+                <p className="text-xs text-[#8892b0]">Medium</p>
+              </div>
+              <div className="text-center">
+                <p className="font-mono text-2xl font-bold text-blue-400">{depVulns.low}</p>
+                <p className="text-xs text-[#8892b0]">Low</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {depVulns.findings.map((finding, idx) => (
+                <div
+                  key={`${finding.id}-${idx}`}
+                  className={`rounded-lg p-3 text-xs ${SEVERITY_BOX_COLORS[finding.severity] ?? ""}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <SeverityBadge severity={finding.severity} />
+                    <span className="font-medium font-mono">{finding.package_name}</span>
+                    <span className="text-[#5a6480]">{finding.installed_version}</span>
+                    <span className="ml-auto text-[#5a6480] font-mono">
+                      {finding.cve && (
+                        <a
+                          href={finding.url ?? `https://nvd.nist.gov/vuln/detail/${finding.cve}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-blue-400"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {finding.cve}
+                        </a>
+                      )}
+                    </span>
+                  </div>
+                  <p className="font-medium mb-0.5">{finding.title}</p>
+                  <p className="text-[#8892b0]">{finding.description}</p>
+                  <div className="flex items-center gap-4 mt-2 text-[#5a6480]">
+                    <span>Vulnerable: <span className="font-mono text-red-400">{finding.vulnerable_range}</span></span>
+                    {finding.patched_version && (
+                      <span>Fix: upgrade to <span className="font-mono text-green-400">&gt;={finding.patched_version}</span></span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* File Analysis Results */}
       {latestCompletedScanId && !resultsLoading && scanResults && scanResults.results.length > 0 && (
         <>
@@ -738,6 +840,27 @@ export default function RepositoryDetailPage() {
                 recommendations.push({
                   severity: "medium",
                   text: `${vulnStats.medium} medium-severity security finding${vulnStats.medium > 1 ? "s" : ""} detected (weak crypto, insecure cookies). Schedule remediation within the current sprint.`,
+                })
+              }
+            }
+            // Dependency vulnerability recommendations
+            if (depVulns && depVulns.total > 0) {
+              if (depVulns.critical > 0) {
+                recommendations.unshift({
+                  severity: "high",
+                  text: `${depVulns.critical} critical vulnerable package${depVulns.critical > 1 ? "s" : ""} in dependencies (prototype pollution, code injection). Run npm audit fix or update packages immediately.`,
+                })
+              }
+              if (depVulns.high > 0) {
+                recommendations.push({
+                  severity: "high",
+                  text: `${depVulns.high} high-severity vulnerable package${depVulns.high > 1 ? "s" : ""} found (ReDoS, SSRF). Update affected dependencies to patched versions.`,
+                })
+              }
+              if (depVulns.medium + depVulns.low > 0) {
+                recommendations.push({
+                  severity: "medium",
+                  text: `${depVulns.medium + depVulns.low} medium/low dependency finding${(depVulns.medium + depVulns.low) > 1 ? "s" : ""}. Review and update when possible.`,
                 })
               }
             }
@@ -1023,6 +1146,7 @@ export default function RepositoryDetailPage() {
                   risk_zone?: string
                   commit_sha?: string
                   vulnerabilities?: { total?: number; critical?: number; high?: number }
+                  dependency_vulnerabilities?: { total?: number }
                 } | null
                 const scanCommit = scan.commit_sha || summary?.commit_sha || null
 
@@ -1104,6 +1228,14 @@ export default function RepositoryDetailPage() {
                                 {summary.vulnerabilities.total}
                               </p>
                               <p className="text-xs text-[#8892b0]">Vulns</p>
+                            </div>
+                          )}
+                          {summary.dependency_vulnerabilities && (summary.dependency_vulnerabilities.total ?? 0) > 0 && (
+                            <div className="text-right">
+                              <p className="font-mono text-sm font-semibold text-orange-400">
+                                {summary.dependency_vulnerabilities.total}
+                              </p>
+                              <p className="text-xs text-[#8892b0]">Deps</p>
                             </div>
                           )}
                         </>

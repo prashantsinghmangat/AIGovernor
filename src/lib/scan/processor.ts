@@ -3,6 +3,7 @@ import { createGitHubClient } from '@/lib/github/client';
 import { decrypt } from '@/lib/utils/encryption';
 import { detectAICode } from '@/lib/detection/combined-scorer';
 import { detectVulnerabilities } from '@/lib/detection/vulnerability-detector';
+import { scanDependencies } from '@/lib/detection/dependency-scanner';
 import { calculateAIDebtScore } from '@/lib/scoring/ai-debt-score';
 import type { Json } from '@/types/database';
 
@@ -273,6 +274,24 @@ export async function processPendingScan(): Promise<{
 
     console.log(`[Scan Processor] Analyzed ${scanResults.length} files, ${totalLoc} LOC total`);
 
+    // 5b. Fetch package.json and scan dependencies for known vulnerabilities
+    let depScanResult: ReturnType<typeof scanDependencies> | null = null;
+    try {
+      const { data: pkgData } = await octokit.repos.getContent({
+        owner,
+        repo: repoName,
+        path: 'package.json',
+        ref: repo.default_branch,
+      });
+      if ('content' in pkgData && pkgData.encoding === 'base64') {
+        const pkgContent = Buffer.from(pkgData.content, 'base64').toString('utf-8');
+        depScanResult = scanDependencies(pkgContent);
+        console.log(`[Scan Processor] Dependency scan: ${depScanResult.total_dependencies} deps, ${depScanResult.total_findings} finding(s)`);
+      }
+    } catch {
+      console.log(`[Scan Processor] No package.json found in ${repo.full_name} (skipping dependency scan)`);
+    }
+
     // 6. Insert scan results in batches
     if (scanResults.length > 0) {
       const BATCH_SIZE = 25;
@@ -423,6 +442,31 @@ export async function processPendingScan(): Promise<{
       });
     }
 
+    // Dependency vulnerability alerts
+    if (depScanResult && depScanResult.critical_count > 0) {
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'high',
+        category: 'dependency',
+        title: `Critical dependency vulnerabilities in ${repo.full_name}`,
+        description: `${depScanResult.critical_count} critical vulnerable package${depScanResult.critical_count > 1 ? 's' : ''} found (prototype pollution, code injection). Update affected packages immediately.`,
+        status: 'active',
+      });
+    }
+
+    if (depScanResult && depScanResult.high_count > 0) {
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'high',
+        category: 'dependency',
+        title: `Vulnerable dependencies in ${repo.full_name}`,
+        description: `${depScanResult.high_count} high-severity vulnerable package${depScanResult.high_count > 1 ? 's' : ''} found (ReDoS, SSRF, injection). Review and update.`,
+        status: 'active',
+      });
+    }
+
     if (alertInserts.length > 0) {
       await admin.from('alerts').insert(alertInserts);
     }
@@ -447,6 +491,15 @@ export async function processPendingScan(): Promise<{
         low: totalVulnLow,
         total: totalVulns,
       },
+      dependency_vulnerabilities: depScanResult ? {
+        total_dependencies: depScanResult.total_dependencies,
+        critical: depScanResult.critical_count,
+        high: depScanResult.high_count,
+        medium: depScanResult.medium_count,
+        low: depScanResult.low_count,
+        total: depScanResult.total_findings,
+        findings: depScanResult.findings,
+      } : null,
     };
 
     await admin.from('scans').update({
