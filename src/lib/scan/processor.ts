@@ -44,6 +44,29 @@ export async function processPendingScan(): Promise<{
 }> {
   const admin = createAdminSupabase();
 
+  // 0. Fail stale scans (pending or running > 10 minutes)
+  const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+  await admin
+    .from('scans')
+    .update({
+      status: 'failed',
+      error_message: 'Scan timed out: stuck in pending state for over 10 minutes',
+      completed_at: new Date().toISOString(),
+    })
+    .eq('status', 'pending')
+    .lt('created_at', staleThreshold);
+
+  await admin
+    .from('scans')
+    .update({
+      status: 'failed',
+      error_message: 'Scan timed out: stuck in running state for over 10 minutes',
+      completed_at: new Date().toISOString(),
+    })
+    .eq('status', 'running')
+    .lt('started_at', staleThreshold);
+
   // 1. Claim next pending scan
   const { data: pendingScan, error: claimError } = await admin
     .from('scans')

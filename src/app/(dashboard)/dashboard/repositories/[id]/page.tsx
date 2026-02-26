@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { Fragment, useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -27,19 +27,176 @@ import {
   Lock,
   Globe,
   Info,
+  XCircle,
+  ChevronRight,
+  ChevronDown,
+  Eye,
 } from "lucide-react"
 import { useRepository } from "@/hooks/use-repository"
-import { useTriggerScan, useScanStatus } from "@/hooks/use-scan"
+import { useTriggerScan, useScanStatus, useScanResults } from "@/hooks/use-scan"
 import { toast } from "sonner"
 import { GaugeChart } from "@/components/dashboard/gauge-chart"
 import { ScoreTrendChart } from "@/components/charts/score-trend-chart"
 import { formatRelativeTime, formatDate } from "@/lib/utils/format"
+
+const STYLE_SIGNAL_LABELS: Record<string, { label: string; description: string; weight: number }> = {
+  naming_verbosity: {
+    label: "Naming Verbosity",
+    description: "Long, descriptive variable and function names typical of AI-generated code",
+    weight: 20,
+  },
+  comment_uniformity: {
+    label: "Comment Uniformity",
+    description: "Consistent comment formatting and capitalization patterns",
+    weight: 15,
+  },
+  typo_absence: {
+    label: "Typo Absence",
+    description: "No human markers like TODO, FIXME, or typos in comments/strings",
+    weight: 10,
+  },
+  indent_consistency: {
+    label: "Indent Consistency",
+    description: "Perfect, uniform indentation throughout the file",
+    weight: 10,
+  },
+  error_handling_ratio: {
+    label: "Error Handling",
+    description: "Comprehensive try/catch coverage and error boundary patterns",
+    weight: 15,
+  },
+  boilerplate_ratio: {
+    label: "Boilerplate Patterns",
+    description: "Guard clauses, status code checks, and template-like structures",
+    weight: 10,
+  },
+  docstring_formality: {
+    label: "Docstring Formality",
+    description: "Formal JSDoc/TSDoc with @param/@returns annotations",
+    weight: 10,
+  },
+  import_organization: {
+    label: "Import Organization",
+    description: "Alphabetically sorted and logically grouped imports",
+    weight: 10,
+  },
+}
+
+function SignalBar({ score, color }: { score: number; color: string }) {
+  return (
+    <div className="w-full h-2 rounded-full bg-[#1e2a4a] overflow-hidden">
+      <div
+        className={`h-full rounded-full ${color}`}
+        style={{ width: `${Math.round(score * 100)}%` }}
+      />
+    </div>
+  )
+}
+
+function DetectionSignalPanel({ signals }: { signals: Record<string, unknown> }) {
+  const method = (signals.method as string) ?? "unknown"
+  const metadata = signals.metadata as {
+    matched?: boolean
+    confidence?: number
+    source?: string | null
+    matchedText?: string | null
+  } | null
+  const style = signals.style as {
+    score?: number
+    signals?: Record<string, number>
+  } | null
+  const styleSignals = style?.signals ?? {}
+
+  return (
+    <div className="bg-[#0d1321] border-t border-[#1e2a4a] px-6 py-4 space-y-4">
+      {/* Detection method */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Eye className="h-4 w-4 text-blue-400" />
+          <span className="text-xs font-medium uppercase text-[#5a6480]">Detection Method</span>
+        </div>
+        <Badge variant="secondary" className="bg-blue-500/20 text-blue-300 border-0 text-xs">
+          {method.replace(/_/g, " ").replace(/\+/g, " + ")}
+        </Badge>
+        {style?.score != null && (
+          <span className="text-xs text-[#8892b0]">
+            Overall style score: <span className="font-mono text-white">{(style.score * 100).toFixed(0)}%</span>
+          </span>
+        )}
+      </div>
+
+      {/* Metadata detection */}
+      {metadata?.matched && (
+        <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+          <p className="text-xs font-medium text-amber-300 mb-1">Metadata Signal Detected</p>
+          <p className="text-xs text-amber-200/80">
+            Source: <span className="font-mono">{metadata.source ?? "unknown"}</span>
+            {metadata.matchedText && (
+              <> &mdash; matched: <span className="font-mono">&quot;{metadata.matchedText}&quot;</span></>
+            )}
+            {metadata.confidence != null && (
+              <> &mdash; confidence: <span className="font-mono">{(metadata.confidence * 100).toFixed(0)}%</span></>
+            )}
+          </p>
+        </div>
+      )}
+
+      {/* Style signals breakdown */}
+      {Object.keys(styleSignals).length > 0 && (
+        <div>
+          <p className="text-xs font-medium uppercase text-[#5a6480] mb-3">Style Analysis Breakdown</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {Object.entries(styleSignals)
+              .sort(([a], [b]) => {
+                const wA = STYLE_SIGNAL_LABELS[a]?.weight ?? 0
+                const wB = STYLE_SIGNAL_LABELS[b]?.weight ?? 0
+                return wB - wA
+              })
+              .map(([key, score]) => {
+                const info = STYLE_SIGNAL_LABELS[key]
+                const barColor =
+                  score > 0.7
+                    ? "bg-red-500"
+                    : score > 0.4
+                    ? "bg-amber-500"
+                    : "bg-green-500"
+                return (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#c8cdd8]">
+                        {info?.label ?? key}
+                        <span className="text-[#5a6480] ml-1">({info?.weight ?? 0}%)</span>
+                      </span>
+                      <span className="font-mono text-xs text-white">
+                        {(score * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                    <SignalBar score={score} color={barColor} />
+                    {info?.description && (
+                      <p className="text-[10px] text-[#5a6480] leading-tight">{info.description}</p>
+                    )}
+                  </div>
+                )
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* No style signals */}
+      {Object.keys(styleSignals).length === 0 && !metadata?.matched && (
+        <p className="text-xs text-[#5a6480]">No detailed signal data available for this file.</p>
+      )}
+    </div>
+  )
+}
 
 export default function RepositoryDetailPage() {
   const params = useParams()
   const repoId = params.id as string
   const queryClient = useQueryClient()
   const [activeScanId, setActiveScanId] = useState<string | null>(null)
+  const [expandedFileId, setExpandedFileId] = useState<string | null>(null)
+  const [riskFilter, setRiskFilter] = useState<"all" | "high" | "medium" | "low">("all")
 
   const { data, isLoading } = useRepository(repoId)
   const { mutate: triggerScan, isPending: scanPending } = useTriggerScan()
@@ -49,6 +206,10 @@ export default function RepositoryDetailPage() {
   const scanState = scanStatus?.data?.status
   const isScanning = activeScanId && scanState !== "completed" && scanState !== "failed"
 
+  // Find latest completed scan for file results
+  const latestCompletedScanId = data?.scan_history?.find(s => s.status === "completed")?.id ?? null
+  const { data: scanResults, isLoading: resultsLoading } = useScanResults(latestCompletedScanId)
+
   // When scan completes or fails, refresh data and clear tracking
   useEffect(() => {
     if (activeScanId && scanState === "completed") {
@@ -56,6 +217,7 @@ export default function RepositoryDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["repository", repoId] })
       queryClient.invalidateQueries({ queryKey: ["repositories"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      queryClient.invalidateQueries({ queryKey: ["scan-results"] })
       setActiveScanId(null)
     } else if (activeScanId && scanState === "failed") {
       toast.error("Scan failed: " + (scanStatus?.data?.error_message || "Unknown error"))
@@ -175,6 +337,15 @@ export default function RepositoryDetailPage() {
               <span className="ml-auto font-mono text-sm text-blue-400">{scanProgress}%</span>
             </div>
             <Progress value={scanProgress} className="h-2" />
+            <p className="text-xs text-blue-300/60 mt-2">
+              {scanProgress < 10
+                ? "Initializing scan..."
+                : scanProgress < 80
+                ? "Analyzing files..."
+                : scanProgress < 90
+                ? "Calculating scores..."
+                : "Finalizing..."}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -298,6 +469,277 @@ export default function RepositoryDetailPage() {
         </Card>
       )}
 
+      {/* File Analysis Results */}
+      {latestCompletedScanId && !resultsLoading && scanResults && scanResults.results.length > 0 && (
+        <>
+          {/* Risk Summary + Recommendations */}
+          {(() => {
+            const results = scanResults.results
+            const highRisk = results.filter(f => f.risk_level === "high")
+            const mediumRisk = results.filter(f => f.risk_level === "medium")
+            const lowRisk = results.filter(f => f.risk_level === "low")
+            const totalAiLoc = results.reduce((sum, f) => sum + f.ai_loc, 0)
+            const totalLoc = results.reduce((sum, f) => sum + f.total_loc, 0)
+            const avgProb = results.length > 0
+              ? Math.round((results.reduce((sum, f) => sum + f.ai_probability, 0) / results.length) * 100)
+              : 0
+
+            const recommendations: Array<{ severity: "high" | "medium" | "low"; text: string }> = []
+
+            if (highRisk.length > 0) {
+              recommendations.push({
+                severity: "high",
+                text: `${highRisk.length} file${highRisk.length > 1 ? "s" : ""} flagged as high risk (>70% AI probability). Review these files for correctness, security vulnerabilities, and test coverage. Priority: ${highRisk.slice(0, 3).map(f => f.file_path.split("/").pop()).join(", ")}`,
+              })
+            }
+            if (mediumRisk.length > 5) {
+              recommendations.push({
+                severity: "medium",
+                text: `${mediumRisk.length} files in medium risk range (40-70%). These show AI-generated patterns like consistent naming and boilerplate structure. Add code reviews for any files handling authentication, data, or business logic.`,
+              })
+            }
+            if (totalLoc > 0 && totalAiLoc / totalLoc > 0.5) {
+              recommendations.push({
+                severity: "high",
+                text: `Over 50% of total LOC is estimated AI-generated. Consider establishing AI code review policies and tracking which AI tools are used for code generation.`,
+              })
+            }
+            if (avgProb > 35 && avgProb <= 45 && highRisk.length === 0) {
+              recommendations.push({
+                severity: "low",
+                text: `Average AI probability is ${avgProb}% with no high-risk files. This is a normal range — the style analyzer detects common patterns in well-structured code. No immediate action needed.`,
+              })
+            }
+            if (recommendations.length === 0) {
+              recommendations.push({
+                severity: "low",
+                text: "No significant AI governance concerns detected. Continue monitoring with regular scans.",
+              })
+            }
+
+            return (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                {/* Risk Distribution */}
+                <Card className="border-[#1e2a4a] bg-[#131b2e]">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm text-[#8892b0]">Risk Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500" />
+                        <span className="text-sm text-[#8892b0]">High Risk</span>
+                      </div>
+                      <span className="font-mono text-sm font-semibold text-red-400">{highRisk.length} files</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-full bg-amber-500" />
+                        <span className="text-sm text-[#8892b0]">Medium Risk</span>
+                      </div>
+                      <span className="font-mono text-sm font-semibold text-amber-400">{mediumRisk.length} files</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-full bg-green-500" />
+                        <span className="text-sm text-[#8892b0]">Low Risk</span>
+                      </div>
+                      <span className="font-mono text-sm font-semibold text-green-400">{lowRisk.length} files</span>
+                    </div>
+                    <div className="border-t border-[#1e2a4a] pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-[#8892b0]">Avg AI Probability</span>
+                        <span className="font-mono text-sm font-semibold text-white">{avgProb}%</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-sm text-[#8892b0]">AI LOC / Total LOC</span>
+                        <span className="font-mono text-sm font-semibold text-white">
+                          {totalAiLoc.toLocaleString()} / {totalLoc.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Recommendations */}
+                <Card className="border-[#1e2a4a] bg-[#131b2e] lg:col-span-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm text-[#8892b0]">Recommendations</CardTitle>
+                    <CardDescription className="text-[#5a6480]">
+                      Actions based on scan analysis
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {recommendations.map((rec, i) => (
+                      <div
+                        key={i}
+                        className={`rounded-lg p-3 text-sm ${
+                          rec.severity === "high"
+                            ? "bg-red-500/10 border border-red-500/20 text-red-300"
+                            : rec.severity === "medium"
+                            ? "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+                            : "bg-green-500/10 border border-green-500/20 text-green-300"
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {rec.severity === "high" ? (
+                            <AlertTriangleIcon className="h-4 w-4 shrink-0 mt-0.5" />
+                          ) : rec.severity === "medium" ? (
+                            <ShieldAlertIcon className="h-4 w-4 shrink-0 mt-0.5" />
+                          ) : (
+                            <CheckCircleIcon className="h-4 w-4 shrink-0 mt-0.5" />
+                          )}
+                          <span>{rec.text}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )
+          })()}
+
+          {/* File Table */}
+          <Card className="border-[#1e2a4a] bg-[#131b2e]">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-white">File Analysis Results</CardTitle>
+                  <CardDescription className="text-[#8892b0] mt-1">
+                    {scanResults.total} files analyzed. Click any row to see why it was flagged.
+                  </CardDescription>
+                </div>
+                <div className="flex gap-1.5">
+                  {(["all", "high", "medium", "low"] as const).map((level) => (
+                    <Button
+                      key={level}
+                      variant={riskFilter === level ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => { setRiskFilter(level); setExpandedFileId(null) }}
+                      className={
+                        riskFilter === level
+                          ? level === "high"
+                            ? "bg-red-600 text-white text-xs"
+                            : level === "medium"
+                            ? "bg-amber-600 text-white text-xs"
+                            : level === "low"
+                            ? "bg-green-600 text-white text-xs"
+                            : "bg-blue-600 text-white text-xs"
+                          : "border-[#1e2a4a] text-[#8892b0] text-xs"
+                      }
+                    >
+                      {level.charAt(0).toUpperCase() + level.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-[#1e2a4a] overflow-x-auto">
+                <table className="w-full table-fixed">
+                  <thead>
+                    <tr className="border-b border-[#1e2a4a] bg-[#0a0e1a]">
+                      <th className="w-10 px-2 py-3" />
+                      <th className="text-left text-xs font-medium uppercase text-[#5a6480] px-4 py-3">File Path</th>
+                      <th className="text-left text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-24">Language</th>
+                      <th className="text-right text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-20">LOC</th>
+                      <th className="text-right text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-20">AI LOC</th>
+                      <th className="text-right text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-20">AI Prob</th>
+                      <th className="text-left text-xs font-medium uppercase text-[#5a6480] px-4 py-3 w-24">Risk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scanResults.results
+                    .filter((f) => riskFilter === "all" || f.risk_level === riskFilter)
+                    .map((file) => {
+                      const isExpanded = expandedFileId === file.id
+                      return (
+                        <Fragment key={file.id}>
+                          <tr
+                            className={`cursor-pointer transition-colors border-b border-[#1e2a4a]/50 ${
+                              isExpanded ? "bg-[#182040]" : "hover:bg-[#182040]"
+                            }`}
+                            onClick={() => setExpandedFileId(isExpanded ? null : file.id)}
+                          >
+                            <td className="px-2 py-3 text-center">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-[#5a6480] inline-block" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-[#5a6480] inline-block" />
+                              )}
+                            </td>
+                            <td className="text-sm text-[#e8eaf0] px-4 py-3 font-mono truncate" title={file.file_path}>
+                              {file.file_path}
+                            </td>
+                            <td className="text-sm text-[#8892b0] px-4 py-3">{file.language ?? "--"}</td>
+                            <td className="text-sm text-[#e8eaf0] px-4 py-3 text-right font-mono">
+                              {file.total_loc}
+                            </td>
+                            <td className="text-sm text-[#e8eaf0] px-4 py-3 text-right font-mono">
+                              {file.ai_loc}
+                            </td>
+                            <td className="text-sm px-4 py-3 text-right font-mono">
+                              <span
+                                className={
+                                  file.ai_probability > 0.7
+                                    ? "text-red-400"
+                                    : file.ai_probability > 0.4
+                                    ? "text-amber-400"
+                                    : "text-green-400"
+                                }
+                              >
+                                {(file.ai_probability * 100).toFixed(0)}%
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge
+                                variant={file.risk_level === "high" ? "destructive" : "secondary"}
+                                className={
+                                  file.risk_level === "high"
+                                    ? ""
+                                    : file.risk_level === "medium"
+                                    ? "bg-amber-500/20 text-amber-400 border-0"
+                                    : "bg-green-500/20 text-green-400 border-0"
+                                }
+                              >
+                                {file.risk_level}
+                              </Badge>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} className="p-0">
+                                <DetectionSignalPanel signals={file.detection_signals} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* File results loading state */}
+      {latestCompletedScanId && resultsLoading && (
+        <Card className="border-[#1e2a4a] bg-[#131b2e]">
+          <CardHeader>
+            <CardTitle className="text-white">File Analysis Results</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full bg-[#1e2a4a]" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Scan history */}
       {scan_history.length > 0 && (
         <Card className="border-[#1e2a4a] bg-[#131b2e]">
@@ -310,7 +752,21 @@ export default function RepositoryDetailPage() {
           <CardContent>
             <div className="space-y-3">
               {scan_history.map((scan) => {
-                const summary = scan.summary as Record<string, unknown> | null;
+                const summary = scan.summary as {
+                  total_files_scanned?: number
+                  ai_files_detected?: number
+                  ai_loc_percentage?: number
+                  debt_score?: number
+                  risk_zone?: string
+                } | null
+
+                const scoreColor =
+                  summary?.risk_zone === "critical"
+                    ? "text-red-400"
+                    : summary?.risk_zone === "caution"
+                    ? "text-amber-400"
+                    : "text-green-400"
+
                 return (
                   <div
                     key={scan.id}
@@ -320,7 +776,9 @@ export default function RepositoryDetailPage() {
                       {scan.status === "completed" ? (
                         <CheckCircleIcon className="h-5 w-5 text-green-500" />
                       ) : scan.status === "failed" ? (
-                        <AlertTriangleIcon className="h-5 w-5 text-red-500" />
+                        <XCircle className="h-5 w-5 text-red-500" />
+                      ) : scan.status === "running" ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
                       ) : (
                         <ClockIcon className="h-5 w-5 text-yellow-500" />
                       )}
@@ -334,21 +792,40 @@ export default function RepositoryDetailPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-6">
-                      {summary && (
+                      {summary && scan.status === "completed" ? (
                         <>
                           <div className="text-right">
                             <p className="font-mono text-sm font-semibold text-white">
-                              {(summary.total_files_scanned as number) ?? "--"}
+                              {summary.total_files_scanned ?? "--"}
                             </p>
                             <p className="text-xs text-[#8892b0]">Files</p>
                           </div>
                           <div className="text-right">
                             <p className="font-mono text-sm font-semibold text-[#f59e0b]">
-                              {(summary.ai_files_detected as number) ?? "--"}
+                              {summary.ai_files_detected ?? "--"}
                             </p>
                             <p className="text-xs text-[#8892b0]">AI Detected</p>
                           </div>
+                          <div className="text-right">
+                            <p className="font-mono text-sm font-semibold text-white">
+                              {summary.ai_loc_percentage != null ? `${summary.ai_loc_percentage}%` : "--"}
+                            </p>
+                            <p className="text-xs text-[#8892b0]">AI LOC</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-mono text-sm font-semibold ${scoreColor}`}>
+                              {summary.debt_score ?? "--"}
+                            </p>
+                            <p className="text-xs text-[#8892b0]">Score</p>
+                          </div>
                         </>
+                      ) : (
+                        <Badge
+                          variant={scan.status === "failed" ? "destructive" : "secondary"}
+                          className="text-xs capitalize"
+                        >
+                          {scan.status}
+                        </Badge>
                       )}
                     </div>
                   </div>

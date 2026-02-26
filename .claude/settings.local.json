@@ -39,7 +39,8 @@
       "Bash(ls -la \"d:/Project/AIGovernor/src/app/\\(auth\\)/\")",
       "Bash(grep -r \"ML_SERVICE\\\\|external\\\\|third.party\" /d/Project/AIGovernor/.env*)",
       "Bash(ls -la \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\")",
-      "Bash(cat \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\\\\[id\\\\]/page.tsx\")"
+      "Bash(cat \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/\\\\[id\\\\]/page.tsx\")",
+      "Bash(xargs ls -la)"
     ]
   }
 }

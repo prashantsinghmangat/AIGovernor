@@ -47,6 +47,9 @@ export interface DashboardData {
     id: string;
     severity: string;
     title: string;
+    description?: string;
+    repository_id?: string | null;
+    repository_name?: string | null;
     time: string;
   }>;
   last_scan: string;

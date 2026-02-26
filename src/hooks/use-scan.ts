@@ -44,3 +44,27 @@ export function useScanStatus(scanId: string | null) {
     },
   });
 }
+
+export interface ScanResultItem {
+  id: string;
+  file_path: string;
+  language: string | null;
+  total_loc: number;
+  ai_loc: number;
+  ai_probability: number;
+  risk_level: string;
+  detection_signals: Record<string, unknown>;
+}
+
+export function useScanResults(scanId: string | null) {
+  return useQuery<{ scan_id: string; scan_status: string; results: ScanResultItem[]; total: number }>({
+    queryKey: ['scan-results', scanId],
+    queryFn: async () => {
+      const res = await fetch(`/api/scan/${scanId}/results`);
+      if (!res.ok) throw new Error('Failed to fetch scan results');
+      const json = await res.json();
+      return json.data;
+    },
+    enabled: !!scanId,
+  });
+}

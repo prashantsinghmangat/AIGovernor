@@ -10,6 +10,7 @@ import { ScoreTrendChart } from '@/components/charts/score-trend-chart';
 import { AIUsageChart } from '@/components/charts/ai-usage-chart';
 import { RiskHeatmap } from '@/components/charts/risk-heatmap';
 import { FileCode, Users, AlertTriangle, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 import type { DashboardData } from '@/types/api';
 
 function useDashboard() {
@@ -170,15 +171,31 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {alerts.length > 0 ? (
-              alerts.map((alert) => (
-                <AlertCard
-                  key={alert.id}
-                  id={alert.id}
-                  severity={alert.severity as 'high' | 'medium' | 'low'}
-                  title={alert.title}
-                  time={alert.time}
-                />
-              ))
+              alerts.map((alert) => {
+                const description = [
+                  alert.description,
+                  alert.repository_name ? `Repo: ${alert.repository_name}` : null,
+                ].filter(Boolean).join(' — ') || undefined;
+
+                const card = (
+                  <AlertCard
+                    key={alert.id}
+                    id={alert.id}
+                    severity={alert.severity as 'high' | 'medium' | 'low'}
+                    title={alert.title}
+                    description={description}
+                    time={alert.time}
+                  />
+                );
+
+                return alert.repository_id ? (
+                  <Link key={alert.id} href={`/dashboard/repositories/${alert.repository_id}`}>
+                    {card}
+                  </Link>
+                ) : (
+                  <div key={alert.id}>{card}</div>
+                );
+              })
             ) : (
               <div className="flex items-center justify-center h-[200px]">
                 <p className="text-sm text-[#5a6480]">No active alerts. Everything looks good!</p>

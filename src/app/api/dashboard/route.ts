@@ -19,7 +19,7 @@ export async function GET() {
 
     const [scoresRes, alertsRes, reposRes, latestScanRes, repoScoresRes] = await Promise.all([
       supabase.from('ai_debt_scores').select('*').eq('company_id', companyId).is('repository_id', null).order('calculated_at', { ascending: false }).limit(6),
-      supabase.from('alerts').select('id, severity, title, created_at').eq('company_id', companyId).eq('status', 'active').order('created_at', { ascending: false }).limit(4),
+      supabase.from('alerts').select('id, severity, title, description, created_at, repository_id, repository:repositories(name)').eq('company_id', companyId).eq('status', 'active').order('created_at', { ascending: false }).limit(4),
       supabase.from('repositories').select('id, name').eq('company_id', companyId).eq('is_active', true),
       supabase.from('scans').select('completed_at').eq('company_id', companyId).eq('status', 'completed').order('completed_at', { ascending: false }).limit(1),
       supabase.from('ai_debt_scores').select('repository_id, score, risk_zone, calculated_at').eq('company_id', companyId).not('repository_id', 'is', null).order('calculated_at', { ascending: false }),
@@ -88,6 +88,9 @@ export async function GET() {
           id: a.id,
           severity: a.severity,
           title: a.title,
+          description: a.description,
+          repository_id: a.repository_id,
+          repository_name: (a.repository as { name: string } | null)?.name ?? null,
           time: a.created_at,
         })),
         last_scan: lastScanText,

@@ -3,29 +3,36 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertCard } from '@/components/dashboard/alert-card';
-
-const allAlerts = [
-  { id: '1', severity: 'high' as const, title: 'High AI-generated code in auth module', description: 'Auth API has 52% AI-generated LOC with only 48% review coverage.', time: new Date(Date.now() - 3600000).toISOString() },
-  { id: '2', severity: 'high' as const, title: 'Low human review coverage in backend PRs', description: '39% of AI-generated PRs merged without review this week.', time: new Date(Date.now() - 7200000).toISOString() },
-  { id: '3', severity: 'medium' as const, title: 'Spike in AI refactor suggestions ignored', description: '12 AI-suggested refactors dismissed without review.', time: new Date(Date.now() - 14400000).toISOString() },
-  { id: '4', severity: 'medium' as const, title: 'Prompt inconsistency detected in Frontend repo', description: 'Multiple AI prompting patterns found.', time: new Date(Date.now() - 28800000).toISOString() },
-  { id: '5', severity: 'low' as const, title: 'New team member AI governance onboarding pending', description: 'Vikram D. has not completed onboarding.', time: new Date(Date.now() - 86400000).toISOString() },
-  { id: '6', severity: 'high' as const, title: 'Admin Panel repo exceeds AI debt threshold', description: 'Score dropped to 35 (critical zone).', time: new Date(Date.now() - 172800000).toISOString() },
-];
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAlerts, useDismissAlert } from '@/hooks/use-alerts';
+import { toast } from 'sonner';
 
 export default function AlertsPage() {
   const [filter, setFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
-  const [dismissed, setDismissed] = useState<string[]>([]);
+  const { data, isLoading } = useAlerts('active', filter === 'all' ? undefined : filter);
+  const { mutate: dismissAlert } = useDismissAlert();
 
-  const filtered = allAlerts
-    .filter(a => !dismissed.includes(a.id))
-    .filter(a => filter === 'all' || a.severity === filter);
+  const alerts = data?.data?.alerts ?? [];
+  const total = data?.data?.total ?? 0;
+
+  const handleDismiss = (id: string) => {
+    dismissAlert(
+      { id, newStatus: 'dismissed' },
+      {
+        onSuccess: () => toast.success('Alert dismissed'),
+        onError: () => toast.error('Failed to dismiss alert'),
+      }
+    );
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-display font-bold text-white">Alerts & Notifications</h1>
-        <p className="text-sm text-[#8892b0] mt-1">Active governance alerts and risk notifications</p>
+        <p className="text-sm text-[#8892b0] mt-1">
+          Active governance alerts and risk notifications
+          {!isLoading && ` (${total} total)`}
+        </p>
       </div>
       <div className="flex gap-2">
         {(['all', 'high', 'medium', 'low'] as const).map((s) => (
@@ -41,10 +48,34 @@ export default function AlertsPage() {
         ))}
       </div>
       <div className="space-y-3">
-        {filtered.map((alert) => (
-          <AlertCard key={alert.id} {...alert} onDismiss={(id) => setDismissed(prev => [...prev, id])} />
-        ))}
-        {filtered.length === 0 && (
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full bg-[#1e2a4a] rounded-lg" />
+          ))
+        ) : alerts.length > 0 ? (
+          alerts.map((alert: {
+            id: string;
+            severity: string;
+            title: string;
+            description: string;
+            repository_name: string | null;
+            created_at: string;
+          }) => (
+            <AlertCard
+              key={alert.id}
+              id={alert.id}
+              severity={alert.severity as 'high' | 'medium' | 'low'}
+              title={alert.title}
+              description={
+                [alert.description, alert.repository_name ? `Repo: ${alert.repository_name}` : null]
+                  .filter(Boolean)
+                  .join(' — ')
+              }
+              time={alert.created_at}
+              onDismiss={handleDismiss}
+            />
+          ))
+        ) : (
           <p className="text-center text-[#5a6480] py-12">No alerts to show</p>
         )}
       </div>
