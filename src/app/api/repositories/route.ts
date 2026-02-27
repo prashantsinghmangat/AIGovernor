@@ -102,13 +102,59 @@ export async function POST(request: NextRequest) {
 
   // Use admin client to bypass RLS — auth is already verified above
   const admin = createAdminSupabase();
-  const { data, error } = await admin.from('repositories').upsert(inserts, { onConflict: 'company_id,github_id' }).select();
 
-  if (error) {
-    console.error('[Repositories POST] error:', error.message, '| code:', error.code);
-    return NextResponse.json({ error: error.message, code: 'INTERNAL_ERROR' }, { status: 500 });
+  // Cannot use .upsert() with onConflict because the unique constraint is a
+  // partial index (WHERE github_id IS NOT NULL) and Postgres ON CONFLICT does
+  // not support partial indexes via the supabase client. Instead, check for
+  // existing repos and insert/update individually.
+  const savedRepos: Record<string, unknown>[] = [];
+  for (const repo of inserts) {
+    // Check if this repo already exists for this company
+    const { data: existing } = await admin
+      .from('repositories')
+      .select('id')
+      .eq('company_id', repo.company_id)
+      .eq('github_id', repo.github_id)
+      .limit(1)
+      .single();
+
+    if (existing) {
+      // Update existing repo
+      const { data: updated, error: updateErr } = await admin
+        .from('repositories')
+        .update({
+          name: repo.name,
+          full_name: repo.full_name,
+          default_branch: repo.default_branch,
+          language: repo.language,
+          is_private: repo.is_private,
+          is_active: true,
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (updateErr) {
+        console.error('[Repositories POST] update error:', updateErr.message);
+      } else if (updated) {
+        savedRepos.push(updated);
+      }
+    } else {
+      // Insert new repo
+      const { data: inserted, error: insertErr } = await admin
+        .from('repositories')
+        .insert(repo)
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error('[Repositories POST] insert error:', insertErr.message);
+      } else if (inserted) {
+        savedRepos.push(inserted);
+      }
+    }
   }
 
-  console.log('[Repositories POST] saved', data?.length, 'repos ✅');
-  return NextResponse.json({ data: { added: data?.length ?? 0, repositories: data || [] } });
+  console.log('[Repositories POST] saved', savedRepos.length, 'repos');
+  return NextResponse.json({ data: { added: savedRepos.length, repositories: savedRepos } });
 }
