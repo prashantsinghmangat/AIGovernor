@@ -51,7 +51,19 @@
       "Bash(npx tsc --noEmit src/lib/detection/vulnerability-detector.ts src/lib/detection/dependency-scanner.ts)",
       "Bash(grep -l \"addRepositories\\\\|Add.*Repositories\" /d/Project/AIGovernor/src/hooks/*.ts)",
       "Bash(npm install jszip)",
-      "Bash(wc -l d:/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)"
+      "Bash(wc -l d:/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
+      "Bash(wc -l \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/[id]/page.tsx\")",
+      "Bash(wc -l /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
+      "Bash(cat \"/d/Project/AIGovernor/src/app/\\(dashboard\\)/dashboard/repositories/[id]/page.tsx\")",
+      "Bash(grep -n \"code_quality\\\\|enhancements\\\\|quality_grade\\\\|enhancement\" /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
+      "Bash(find src/lib/detection/code-quality/rules -name \"*.ts\" -exec wc -l {} +)",
+      "Bash(head -200 /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
+      "Bash(tail -300 /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
+      "Bash(xargs grep -l \"code_quality\\\\|enhancements\")",
+      "Bash(sed -n '100,400p' /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
+      "Bash(wc -l /d/Project/AIGovernor/src/lib/detection/code-quality/rules/*.ts)",
+      "Bash(grep -c \"id:\" /d/Project/AIGovernor/src/lib/detection/enhancements/rules/*.ts)",
+      "Bash(ls -la d:/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/)"
     ]
   }
 }

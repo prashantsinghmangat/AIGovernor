@@ -43,6 +43,12 @@ import { UploadZipDialog } from "@/components/dashboard/upload-zip-dialog"
 import { toast } from "sonner"
 import { GaugeChart } from "@/components/dashboard/gauge-chart"
 import { ScoreTrendChart } from "@/components/charts/score-trend-chart"
+import { CodeQualityCard } from "@/components/dashboard/repo-detail/code-quality-card"
+import { EnhancementSuggestionsCard } from "@/components/dashboard/repo-detail/enhancement-suggestions-card"
+import { RemediationPanel } from "@/components/dashboard/repo-detail/remediation-panel"
+import { SensitiveFilesCard } from "@/components/dashboard/repo-detail/sensitive-files-card"
+import { LicenseComplianceCard } from "@/components/dashboard/repo-detail/license-compliance-card"
+import { InfrastructureCard } from "@/components/dashboard/repo-detail/infrastructure-card"
 import { formatRelativeTime, formatDate } from "@/lib/utils/format"
 
 const STYLE_SIGNAL_LABELS: Record<string, { label: string; description: string; weight: number }> = {
@@ -398,6 +404,28 @@ export default function RepositoryDetailPage() {
   // Extract dependency vulnerability data from latest scan summary
   const depVulns = (latestCompletedScan?.summary as { dependency_vulnerabilities?: DepVulnSummary } | null)
     ?.dependency_vulnerabilities ?? null
+
+  // Extract code quality and enhancement data from scan summary
+  const codeQualityStats = stats.code_quality ?? null
+  const enhancementStats = stats.enhancements ?? null
+
+  // Extract new scan data from latest scan summary
+  const latestSummary = latestCompletedScan?.summary as Record<string, unknown> | null
+  const sensitiveFilesData = latestSummary?.sensitive_files as {
+    total_findings: number; critical_count: number; high_count: number;
+    medium_count: number; low_count: number;
+    findings: Array<{ file_path: string; severity: string; category: string; title: string; description: string; remediation: string }>
+  } | null
+  const licenseComplianceData = latestSummary?.license_compliance as {
+    total_packages: number; permissive_count: number; weak_copyleft_count: number;
+    strong_copyleft_count: number; unknown_count: number;
+    findings: Array<{ package_name: string; version: string; license: string; risk: string; ecosystem: string }>
+  } | null
+  const infrastructureData = latestSummary?.infrastructure as {
+    total_findings: number; critical_count: number; high_count: number;
+    medium_count: number; low_count: number;
+    findings: Array<{ id: string; severity: string; fileType: string; title: string; description: string; remediation: string; file_path: string; line?: number; matchedText?: string }>
+  } | null
 
   const riskZone = latest_score?.risk_zone
   const riskBadgeVariant =
@@ -802,6 +830,68 @@ export default function RepositoryDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Code Quality + Enhancement Suggestions */}
+      {(codeQualityStats || enhancementStats) && (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {codeQualityStats && codeQualityStats.total_findings > 0 && (
+            <CodeQualityCard codeQuality={codeQualityStats} />
+          )}
+          {enhancementStats && enhancementStats.total_suggestions > 0 && (
+            <EnhancementSuggestionsCard enhancements={enhancementStats} />
+          )}
+        </div>
+      )}
+
+      {/* Sensitive Files + License Compliance + Infrastructure Security */}
+      {(sensitiveFilesData || licenseComplianceData || infrastructureData) && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {sensitiveFilesData && sensitiveFilesData.total_findings > 0 && (
+            <SensitiveFilesCard data={sensitiveFilesData} />
+          )}
+          {licenseComplianceData && licenseComplianceData.total_packages > 0 && (
+            <LicenseComplianceCard data={licenseComplianceData} />
+          )}
+          {infrastructureData && infrastructureData.total_findings > 0 && (
+            <InfrastructureCard data={infrastructureData} />
+          )}
+        </div>
+      )}
+
+      {/* Remediation Guide */}
+      {latestCompletedScanId && scanResults && (() => {
+        // Collect all code vulnerability findings across files
+        const allCodeVulns = scanResults.results.flatMap((r) => {
+          const signals = r.detection_signals as Record<string, unknown> | null
+          const vulns = signals?.vulnerabilities as VulnResult | null
+          return (vulns?.findings ?? []).map(f => ({ ...f, file_path: r.file_path }))
+        })
+        // Collect all code quality findings across files
+        const allQualityFindings = scanResults.results.flatMap((r) => {
+          const signals = r.detection_signals as Record<string, unknown> | null
+          const cq = signals?.code_quality as { findings?: Array<{ id: string; severity: string; category: string; title: string; description: string; suggestion: string; line?: number }> } | null
+          return (cq?.findings ?? []).map(f => ({ ...f, file_path: r.file_path }))
+        })
+        // Collect all enhancement suggestions across files
+        const allEnhancements = scanResults.results.flatMap((r) => {
+          const signals = r.detection_signals as Record<string, unknown> | null
+          const enh = signals?.enhancements as { suggestions?: Array<{ id: string; category: string; impact: string; title: string; description: string; recommendation: string; link?: string; line?: number }> } | null
+          return (enh?.suggestions ?? []).map(s => ({ ...s, file_path: r.file_path }))
+        })
+
+        const hasItems = (depVulns?.findings?.length ?? 0) > 0 || allCodeVulns.length > 0 || allQualityFindings.length > 0 || allEnhancements.length > 0
+
+        if (!hasItems) return null
+
+        return (
+          <RemediationPanel
+            depVulnFindings={depVulns?.findings}
+            codeVulnFindings={allCodeVulns}
+            qualityFindings={allQualityFindings}
+            enhancementSuggestions={allEnhancements}
+          />
+        )
+      })()}
 
       {/* File Analysis Results */}
       {latestCompletedScanId && !resultsLoading && scanResults && scanResults.results.length > 0 && (

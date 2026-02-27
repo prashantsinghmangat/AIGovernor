@@ -5,6 +5,12 @@ import { detectCodeQuality } from '@/lib/detection/code-quality/detector';
 import { detectEnhancements } from '@/lib/detection/enhancements/detector';
 import { scanAllDependencies } from '@/lib/detection/dependency-scanning/scanner';
 import type { MultiEcosystemScanResult } from '@/lib/detection/dependency-scanning/types';
+import { detectSensitiveFiles } from '@/lib/detection/sensitive-files/detector';
+import type { SensitiveFileResult } from '@/lib/detection/sensitive-files/types';
+import { scanNpmLicenses } from '@/lib/detection/license-scanning/detector';
+import type { LicenseResult } from '@/lib/detection/license-scanning/types';
+import { detectInfraIssues, getInfraFileType } from '@/lib/detection/infrastructure/detector';
+import type { InfraResult, InfraFinding } from '@/lib/detection/infrastructure/types';
 import { calculateAIDebtScore } from '@/lib/scoring/ai-debt-score';
 import type { Json } from '@/types/database';
 
@@ -281,6 +287,70 @@ export async function processUploadScan(scanId?: string): Promise<{
       console.log(`[Upload Processor] Dependency scan error:`, err instanceof Error ? err.message : err);
     }
 
+    // 9b. Sensitive file detection
+    let sensitiveFileResult: SensitiveFileResult | null = null;
+    try {
+      const allPaths = Object.keys(fileMap);
+      sensitiveFileResult = detectSensitiveFiles(allPaths);
+      if (sensitiveFileResult.total_findings > 0) {
+        console.log(
+          `[Upload Processor] Sensitive files detected: ${sensitiveFileResult.total_findings} ` +
+          `(${sensitiveFileResult.critical_count} critical, ${sensitiveFileResult.high_count} high)`,
+        );
+      }
+    } catch (err) {
+      console.log(`[Upload Processor] Sensitive file detection error:`, err instanceof Error ? err.message : err);
+    }
+
+    // 9c. License compliance scanning
+    let licenseResult: LicenseResult | null = null;
+    try {
+      // Find lockfile or package.json for license scanning
+      const lockfilePath = Object.keys(fileMap).find(p => p.endsWith('package-lock.json') && p.split('/').length <= 2);
+      const pkgJsonPath = Object.keys(fileMap).find(p => p.endsWith('package.json') && p.split('/').length <= 2);
+      const licensePath = lockfilePath ?? pkgJsonPath;
+      if (licensePath) {
+        const content = Buffer.from(fileMap[licensePath], 'base64').toString('utf-8');
+        licenseResult = scanNpmLicenses(content, !!lockfilePath);
+        if (licenseResult.total_packages > 0) {
+          console.log(
+            `[Upload Processor] License scan: ${licenseResult.total_packages} packages — ` +
+            `${licenseResult.permissive_count} permissive, ${licenseResult.weak_copyleft_count} weak-copyleft, ` +
+            `${licenseResult.strong_copyleft_count} strong-copyleft, ${licenseResult.unknown_count} unknown`,
+          );
+        }
+      }
+    } catch (err) {
+      console.log(`[Upload Processor] License scan error:`, err instanceof Error ? err.message : err);
+    }
+
+    // 9d. Infrastructure security scanning (Dockerfiles, GitHub Actions)
+    const infraFindings: InfraFinding[] = [];
+    try {
+      for (const filePath of Object.keys(fileMap)) {
+        const infraType = getInfraFileType(filePath);
+        if (!infraType) continue;
+        const content = Buffer.from(fileMap[filePath], 'base64').toString('utf-8');
+        const result = detectInfraIssues(content, filePath, infraType);
+        infraFindings.push(...result.findings);
+      }
+      if (infraFindings.length > 0) {
+        console.log(`[Upload Processor] Infrastructure issues detected: ${infraFindings.length}`);
+      }
+    } catch (err) {
+      console.log(`[Upload Processor] Infrastructure scan error:`, err instanceof Error ? err.message : err);
+    }
+
+    const infraResult: InfraResult | null = infraFindings.length > 0 ? {
+      total_findings: infraFindings.length,
+      critical_count: infraFindings.filter(f => f.severity === 'critical').length,
+      high_count: infraFindings.filter(f => f.severity === 'high').length,
+      medium_count: infraFindings.filter(f => f.severity === 'medium').length,
+      low_count: infraFindings.filter(f => f.severity === 'low').length,
+      findings: infraFindings,
+      scanned: true,
+    } : null;
+
     // 10. Insert scan results in batches
     if (scanResults.length > 0) {
       const BATCH_SIZE = 25;
@@ -476,6 +546,55 @@ export async function processUploadScan(scanId?: string): Promise<{
       });
     }
 
+    // Sensitive file alerts
+    if (sensitiveFileResult && sensitiveFileResult.critical_count > 0) {
+      const sensitiveFiles = sensitiveFileResult.findings
+        .filter(f => f.severity === 'critical')
+        .map(f => f.file_path)
+        .slice(0, 5)
+        .join(', ');
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'high',
+        category: 'sensitive_file',
+        title: `Sensitive files detected in ${repo.full_name}`,
+        description: `${sensitiveFileResult.critical_count} sensitive file${sensitiveFileResult.critical_count > 1 ? 's' : ''} found: ${sensitiveFiles}. These files may contain credentials or private keys.`,
+        status: 'active',
+      });
+    }
+
+    // License compliance alerts
+    if (licenseResult && licenseResult.strong_copyleft_count > 0) {
+      const copyleftPkgs = licenseResult.findings
+        .filter(f => f.risk === 'strong-copyleft')
+        .map(f => `${f.package_name} (${f.license})`)
+        .slice(0, 5)
+        .join(', ');
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'medium',
+        category: 'license',
+        title: `Copyleft license dependencies in ${repo.full_name}`,
+        description: `${licenseResult.strong_copyleft_count} package${licenseResult.strong_copyleft_count > 1 ? 's' : ''} with strong copyleft licenses: ${copyleftPkgs}. These may require open-sourcing derivative works.`,
+        status: 'active',
+      });
+    }
+
+    // Infrastructure security alerts
+    if (infraResult && (infraResult.critical_count > 0 || infraResult.high_count > 0)) {
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'high',
+        category: 'infrastructure',
+        title: `Infrastructure security issues in ${repo.full_name}`,
+        description: `${infraResult.critical_count + infraResult.high_count} critical/high infrastructure finding${(infraResult.critical_count + infraResult.high_count) > 1 ? 's' : ''} in Dockerfiles or CI/CD workflows.`,
+        status: 'active',
+      });
+    }
+
     if (alertInserts.length > 0) {
       await admin.from('alerts').insert(alertInserts);
     }
@@ -526,6 +645,9 @@ export async function processUploadScan(scanId?: string): Promise<{
           findings_count: e.total_findings,
         })),
       } : null,
+      sensitive_files: sensitiveFileResult && sensitiveFileResult.total_findings > 0 ? sensitiveFileResult : null,
+      license_compliance: licenseResult && licenseResult.total_packages > 0 ? licenseResult : null,
+      infrastructure: infraResult,
     };
 
     await admin.from('scans').update({

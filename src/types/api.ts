@@ -172,6 +172,19 @@ export interface RepositoryDetail {
       low: number;
       total: number;
     } | null;
+    code_quality: {
+      worst_grade: string;
+      total_errors: number;
+      total_warnings: number;
+      total_infos: number;
+      total_findings: number;
+    } | null;
+    enhancements: {
+      high_impact: number;
+      medium_impact: number;
+      low_impact: number;
+      total_suggestions: number;
+    } | null;
   };
 }
 

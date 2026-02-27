@@ -121,6 +121,18 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           if (!v) return null;
           return { critical: v.critical ?? 0, high: v.high ?? 0, medium: v.medium ?? 0, low: v.low ?? 0, total: v.total ?? 0 };
         })(),
+        code_quality: (() => {
+          const s = latestCompletedScan?.summary as Record<string, unknown> | null;
+          const cq = s?.code_quality as { worst_grade?: string; total_errors?: number; total_warnings?: number; total_infos?: number; total_findings?: number } | undefined;
+          if (!cq) return null;
+          return { worst_grade: cq.worst_grade ?? 'N/A', total_errors: cq.total_errors ?? 0, total_warnings: cq.total_warnings ?? 0, total_infos: cq.total_infos ?? 0, total_findings: cq.total_findings ?? 0 };
+        })(),
+        enhancements: (() => {
+          const s = latestCompletedScan?.summary as Record<string, unknown> | null;
+          const enh = s?.enhancements as { high_impact?: number; medium_impact?: number; low_impact?: number; total_suggestions?: number } | undefined;
+          if (!enh) return null;
+          return { high_impact: enh.high_impact ?? 0, medium_impact: enh.medium_impact ?? 0, low_impact: enh.low_impact ?? 0, total_suggestions: enh.total_suggestions ?? 0 };
+        })(),
       },
     },
   });

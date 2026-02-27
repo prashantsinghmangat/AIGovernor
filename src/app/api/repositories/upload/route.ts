@@ -16,9 +16,10 @@ const SCAN_EXTENSIONS = new Set([
   'vue', 'svelte', 'dart', 'lua', 'sh', 'bash', 'sql',
 ]);
 
-// Manifest / dependency files we also keep
+// Manifest / dependency files we also keep (includes lockfiles for dep scanning)
 const MANIFEST_FILES = new Set([
-  'package.json', 'requirements.txt', 'Pipfile', 'pyproject.toml',
+  'package.json', 'package-lock.json',
+  'requirements.txt', 'Pipfile', 'pyproject.toml',
   'pom.xml', 'build.gradle', 'go.mod', 'Cargo.toml',
   'Gemfile', 'composer.json', 'packages.config',
 ]);
@@ -95,12 +96,15 @@ export async function POST(request: NextRequest) {
     const ext = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
     const fileName = path.split('/').pop() || '';
 
-    // Only keep code files, manifest files, and .csproj files
+    // Only keep code files, manifest files, .csproj files, and infrastructure files
     const isCode = SCAN_EXTENSIONS.has(ext);
     const isManifest = MANIFEST_FILES.has(fileName);
     const isCsproj = ext === 'csproj';
+    const isInfraFile = fileName === 'Dockerfile' || fileName.startsWith('Dockerfile.')
+      || (fileName.startsWith('docker-compose') && (ext === 'yml' || ext === 'yaml'))
+      || (path.toLowerCase().includes('.github/workflows/') && (ext === 'yml' || ext === 'yaml'));
 
-    if (!isCode && !isManifest && !isCsproj) continue;
+    if (!isCode && !isManifest && !isCsproj && !isInfraFile) continue;
 
     const content = await zipEntry.async('base64');
     const size = Buffer.from(content, 'base64').length;
