@@ -4,7 +4,11 @@ import { analyzeContributors, deriveTeamMetrics } from '@/lib/github/contributor
 import { decrypt } from '@/lib/utils/encryption';
 import { detectAICode } from '@/lib/detection/combined-scorer';
 import { detectVulnerabilities } from '@/lib/detection/vulnerability-detector';
+import { detectCodeQuality } from '@/lib/detection/code-quality/detector';
+import { detectEnhancements } from '@/lib/detection/enhancements/detector';
 import { scanDependencies } from '@/lib/detection/dependency-scanner';
+import { scanAllDependencies } from '@/lib/detection/dependency-scanning/scanner';
+import type { MultiEcosystemScanResult } from '@/lib/detection/dependency-scanning/types';
 import { calculateAIDebtScore } from '@/lib/scoring/ai-debt-score';
 import type { Json } from '@/types/database';
 
@@ -152,6 +156,7 @@ export async function processPendingScan(): Promise<{
     }
 
     // 4. Get the file tree from the default branch
+    let rawTree: Array<{ path: string; size: number }> = [];
     let tree: Array<{ path: string; size: number }> = [];
     try {
       const { data: treeData } = await octokit.git.getTree({
@@ -160,13 +165,14 @@ export async function processPendingScan(): Promise<{
         tree_sha: repo.default_branch,
         recursive: 'true',
       });
-      tree = (treeData.tree || []).filter(
+      // Keep raw tree for manifest file detection (dependency scanning)
+      rawTree = (treeData.tree || []).filter(
         (item): item is typeof item & { path: string; size: number } =>
-          item.type === 'blob' &&
-          !!item.path &&
-          typeof item.size === 'number' &&
-          item.size <= MAX_FILE_SIZE &&
-          CODE_EXTENSIONS.has(getFileExtension(item.path!))
+          item.type === 'blob' && !!item.path && typeof item.size === 'number',
+      );
+      // Filter to code files only for AI/vulnerability analysis
+      tree = rawTree.filter(
+        (item) => item.size <= MAX_FILE_SIZE && CODE_EXTENSIONS.has(getFileExtension(item.path)),
       );
     } catch (err) {
       throw new Error(`Failed to fetch file tree: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -214,6 +220,14 @@ export async function processPendingScan(): Promise<{
     let totalVulnHigh = 0;
     let totalVulnMedium = 0;
     let totalVulnLow = 0;
+    let totalQualityErrors = 0;
+    let totalQualityWarnings = 0;
+    let totalQualityInfos = 0;
+    let worstQualityGrade: string = 'A';
+    const qualityGradeOrder = ['A', 'B', 'C', 'D', 'F'];
+    let totalEnhHighImpact = 0;
+    let totalEnhMediumImpact = 0;
+    let totalEnhLowImpact = 0;
 
     for (let i = 0; i < tree.length; i++) {
       const file = tree[i];
@@ -234,6 +248,8 @@ export async function processPendingScan(): Promise<{
 
           const detection = await detectAICode(content, language, latestCommitMessage);
           const vulnerabilities = detectVulnerabilities(content, language);
+          const codeQuality = detectCodeQuality(content, language);
+          const enhancements = detectEnhancements(content, language);
 
           const aiLoc = Math.round(loc * detection.combined_probability);
           totalLoc += loc;
@@ -242,6 +258,17 @@ export async function processPendingScan(): Promise<{
           totalVulnHigh += vulnerabilities.high_count;
           totalVulnMedium += vulnerabilities.medium_count;
           totalVulnLow += vulnerabilities.low_count;
+          totalQualityErrors += codeQuality.error_count;
+          totalQualityWarnings += codeQuality.warning_count;
+          totalQualityInfos += codeQuality.info_count;
+          totalEnhHighImpact += enhancements.high_impact;
+          totalEnhMediumImpact += enhancements.medium_impact;
+          totalEnhLowImpact += enhancements.low_impact;
+
+          // Track worst quality grade across all files
+          if (qualityGradeOrder.indexOf(codeQuality.quality_grade) > qualityGradeOrder.indexOf(worstQualityGrade)) {
+            worstQualityGrade = codeQuality.quality_grade;
+          }
 
           scanResults.push({
             scan_id: scanId,
@@ -259,6 +286,8 @@ export async function processPendingScan(): Promise<{
               style: detection.style,
               ml: detection.ml,
               vulnerabilities,
+              code_quality: codeQuality,
+              enhancements,
             })) as Json,
           });
         }
@@ -274,23 +303,78 @@ export async function processPendingScan(): Promise<{
     }
 
     console.log(`[Scan Processor] Analyzed ${scanResults.length} files, ${totalLoc} LOC total`);
+    console.log(
+      `[Scan Processor] Code quality: grade ${worstQualityGrade}, ` +
+      `${totalQualityErrors} errors, ${totalQualityWarnings} warnings, ${totalQualityInfos} infos`,
+    );
+    const totalEnhSuggestions = totalEnhHighImpact + totalEnhMediumImpact + totalEnhLowImpact;
+    if (totalEnhSuggestions > 0) {
+      console.log(
+        `[Scan Processor] Enhancement suggestions: ${totalEnhSuggestions} total ` +
+        `(${totalEnhHighImpact} high, ${totalEnhMediumImpact} medium, ${totalEnhLowImpact} low impact)`,
+      );
+    }
 
-    // 5b. Fetch package.json and scan dependencies for known vulnerabilities
+    // 5b. Multi-ecosystem dependency scanning (npm, pip, maven, go, cargo, rubygems, composer, nuget)
     let depScanResult: ReturnType<typeof scanDependencies> | null = null;
-    try {
-      const { data: pkgData } = await octokit.repos.getContent({
-        owner,
-        repo: repoName,
-        path: 'package.json',
-        ref: repo.default_branch,
-      });
-      if ('content' in pkgData && pkgData.encoding === 'base64') {
-        const pkgContent = Buffer.from(pkgData.content, 'base64').toString('utf-8');
-        depScanResult = scanDependencies(pkgContent);
-        console.log(`[Scan Processor] Dependency scan: ${depScanResult.total_dependencies} deps, ${depScanResult.total_findings} finding(s)`);
+    let multiDepResult: MultiEcosystemScanResult | null = null;
+
+    // Helper to fetch file content from GitHub
+    const fetchFile = async (filePath: string): Promise<string | null> => {
+      try {
+        const { data } = await octokit.repos.getContent({
+          owner,
+          repo: repoName,
+          path: filePath,
+          ref: repo.default_branch,
+        });
+        if ('content' in data && data.encoding === 'base64') {
+          return Buffer.from(data.content, 'base64').toString('utf-8');
+        }
+        return null;
+      } catch {
+        return null;
       }
-    } catch {
-      console.log(`[Scan Processor] No package.json found in ${repo.full_name} (skipping dependency scan)`);
+    };
+
+    try {
+      multiDepResult = await scanAllDependencies(rawTree, fetchFile);
+      if (multiDepResult.total_dependencies > 0) {
+        console.log(
+          `[Scan Processor] Multi-ecosystem dependency scan: ${multiDepResult.ecosystems_scanned.join(', ')} — ` +
+          `${multiDepResult.total_dependencies} deps, ${multiDepResult.total_findings} finding(s)`,
+        );
+      }
+
+      // Create a backward-compatible depScanResult from the npm portion (for existing alert logic)
+      const npmResults = multiDepResult.per_ecosystem.filter((e) => e.ecosystem === 'npm');
+      if (npmResults.length > 0) {
+        const npmFindings = npmResults.flatMap((r) => r.findings);
+        depScanResult = {
+          scanned: true,
+          total_dependencies: npmResults.reduce((s, r) => s + r.total_dependencies, 0),
+          total_findings: npmFindings.length,
+          critical_count: npmFindings.filter((f) => f.severity === 'critical').length,
+          high_count: npmFindings.filter((f) => f.severity === 'high').length,
+          medium_count: npmFindings.filter((f) => f.severity === 'medium').length,
+          low_count: npmFindings.filter((f) => f.severity === 'low').length,
+          findings: npmFindings.map((f) => ({
+            id: f.id,
+            package_name: f.package_name,
+            installed_version: f.installed_version,
+            severity: f.severity,
+            title: f.title,
+            description: f.description,
+            vulnerable_range: f.vulnerable_range,
+            patched_version: f.patched_version,
+            cve: f.cve,
+            ghsa: f.ghsa,
+            url: f.url,
+          })),
+        };
+      }
+    } catch (err) {
+      console.log(`[Scan Processor] Dependency scan error:`, err instanceof Error ? err.message : err);
     }
 
     // 6. Insert scan results in batches
@@ -443,27 +527,45 @@ export async function processPendingScan(): Promise<{
       });
     }
 
-    // Dependency vulnerability alerts
-    if (depScanResult && depScanResult.critical_count > 0) {
+    // Code quality alerts
+    if (worstQualityGrade === 'F' || worstQualityGrade === 'D') {
+      const totalQualityFindings = totalQualityErrors + totalQualityWarnings;
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: worstQualityGrade === 'F' ? 'high' : 'medium',
+        category: 'code_quality',
+        title: `Poor code quality detected in ${repo.full_name}`,
+        description: `Worst quality grade: ${worstQualityGrade}. ${totalQualityFindings} quality finding${totalQualityFindings > 1 ? 's' : ''} detected (${totalQualityErrors} errors, ${totalQualityWarnings} warnings). Review code for anti-patterns and complexity issues.`,
+        status: 'active',
+      });
+    }
+
+    // Dependency vulnerability alerts (multi-ecosystem)
+    const depCritical = multiDepResult?.critical_count ?? depScanResult?.critical_count ?? 0;
+    const depHigh = multiDepResult?.high_count ?? depScanResult?.high_count ?? 0;
+    const depEcosystems = multiDepResult?.ecosystems_scanned?.join(', ') ?? 'npm';
+
+    if (depCritical > 0) {
       alertInserts.push({
         company_id: repo.company_id,
         repository_id: repo.id,
         severity: 'high',
         category: 'dependency',
         title: `Critical dependency vulnerabilities in ${repo.full_name}`,
-        description: `${depScanResult.critical_count} critical vulnerable package${depScanResult.critical_count > 1 ? 's' : ''} found (prototype pollution, code injection). Update affected packages immediately.`,
+        description: `${depCritical} critical vulnerable package${depCritical > 1 ? 's' : ''} found across ${depEcosystems}. Update affected packages immediately.`,
         status: 'active',
       });
     }
 
-    if (depScanResult && depScanResult.high_count > 0) {
+    if (depHigh > 0) {
       alertInserts.push({
         company_id: repo.company_id,
         repository_id: repo.id,
         severity: 'high',
         category: 'dependency',
         title: `Vulnerable dependencies in ${repo.full_name}`,
-        description: `${depScanResult.high_count} high-severity vulnerable package${depScanResult.high_count > 1 ? 's' : ''} found (ReDoS, SSRF, injection). Review and update.`,
+        description: `${depHigh} high-severity vulnerable package${depHigh > 1 ? 's' : ''} found across ${depEcosystems}. Review and update.`,
         status: 'active',
       });
     }
@@ -492,7 +594,36 @@ export async function processPendingScan(): Promise<{
         low: totalVulnLow,
         total: totalVulns,
       },
-      dependency_vulnerabilities: depScanResult ? {
+      code_quality: {
+        worst_grade: worstQualityGrade,
+        total_errors: totalQualityErrors,
+        total_warnings: totalQualityWarnings,
+        total_infos: totalQualityInfos,
+        total_findings: totalQualityErrors + totalQualityWarnings + totalQualityInfos,
+      },
+      enhancements: {
+        high_impact: totalEnhHighImpact,
+        medium_impact: totalEnhMediumImpact,
+        low_impact: totalEnhLowImpact,
+        total_suggestions: totalEnhHighImpact + totalEnhMediumImpact + totalEnhLowImpact,
+      },
+      dependency_vulnerabilities: multiDepResult ? {
+        ecosystems_scanned: multiDepResult.ecosystems_scanned,
+        total_dependencies: multiDepResult.total_dependencies,
+        critical: multiDepResult.critical_count,
+        high: multiDepResult.high_count,
+        medium: multiDepResult.medium_count,
+        low: multiDepResult.low_count,
+        total: multiDepResult.total_findings,
+        findings: multiDepResult.findings,
+        per_ecosystem: multiDepResult.per_ecosystem.map((e) => ({
+          ecosystem: e.ecosystem,
+          manifest_file: e.manifest_file,
+          total_dependencies: e.total_dependencies,
+          findings_count: e.total_findings,
+        })),
+      } : depScanResult ? {
+        ecosystems_scanned: ['npm'],
         total_dependencies: depScanResult.total_dependencies,
         critical: depScanResult.critical_count,
         high: depScanResult.high_count,
