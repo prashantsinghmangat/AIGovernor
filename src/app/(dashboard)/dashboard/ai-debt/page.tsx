@@ -5,32 +5,50 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GaugeChart } from '@/components/dashboard/gauge-chart';
 import { ScoreTrendChart } from '@/components/charts/score-trend-chart';
-import { Play, Loader2 } from 'lucide-react';
+import { Play, Loader2, BarChart3Icon } from 'lucide-react';
 import { useTriggerScan } from '@/hooks/use-scan';
+import { useScores } from '@/hooks/use-scores';
+import { LoadingSpinner } from '@/components/shared/loading-spinner';
 import { toast } from 'sonner';
 
-const repos = [
-  { name: 'auth-api', aiLoc: 52, review: 48, risk: 'critical' as const, score: 42 },
-  { name: 'frontend', aiLoc: 38, review: 65, risk: 'caution' as const, score: 65 },
-  { name: 'payments', aiLoc: 25, review: 80, risk: 'caution' as const, score: 78 },
-  { name: 'data-pipeline', aiLoc: 48, review: 40, risk: 'critical' as const, score: 55 },
-  { name: 'notifications', aiLoc: 30, review: 70, risk: 'caution' as const, score: 70 },
-  { name: 'admin-panel', aiLoc: 62, review: 30, risk: 'critical' as const, score: 35 },
-];
-
-const trend = [
-  { month: 'Sep', score: 72 }, { month: 'Oct', score: 69 }, { month: 'Nov', score: 65 },
-  { month: 'Dec', score: 61 }, { month: 'Jan', score: 64 }, { month: 'Feb', score: 68 },
-];
-
-const riskColors = {
+const riskColors: Record<string, string> = {
   critical: 'bg-red-500/20 text-red-400',
   caution: 'bg-amber-500/20 text-amber-400',
   healthy: 'bg-green-500/20 text-green-400',
+  unknown: 'bg-gray-500/20 text-gray-400',
 };
+
+interface RepoScore {
+  repository_id: string;
+  repository_name: string;
+  score: number;
+  risk_zone: string;
+  ai_loc_percentage: number;
+  review_coverage: number;
+}
+
+interface TrendPoint {
+  date: string;
+  score: number;
+  risk_zone: string;
+}
 
 export default function AIDebtPage() {
   const { mutate: triggerScan, isPending } = useTriggerScan();
+  const { data: response, isLoading } = useScores();
+
+  const scoresData = response?.data as {
+    current_score: { score: number; risk_zone: string; change: number; breakdown: Record<string, number> };
+    trend: TrendPoint[];
+    by_repository: RepoScore[];
+  } | undefined;
+
+  const currentScore = scoresData?.current_score?.score ?? 0;
+  const repos = scoresData?.by_repository ?? [];
+  const trend = (scoresData?.trend ?? []).map((t) => ({
+    month: new Date(t.date).toLocaleDateString('en', { month: 'short' }),
+    score: t.score,
+  }));
 
   const handleRunScan = () => {
     triggerScan(
@@ -63,15 +81,24 @@ export default function AIDebtPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="bg-[#131b2e] border-[#1e2a4a] flex items-center justify-center">
           <CardContent className="py-6">
-            <GaugeChart value={68} size={200} />
+            {isLoading ? <LoadingSpinner /> : <GaugeChart value={currentScore} size={200} />}
           </CardContent>
         </Card>
         <Card className="lg:col-span-2 bg-[#131b2e] border-[#1e2a4a]">
           <CardHeader>
-            <CardTitle className="text-white text-base">Score Trend (6 Months)</CardTitle>
+            <CardTitle className="text-white text-base">Score Trend</CardTitle>
           </CardHeader>
           <CardContent>
-            <ScoreTrendChart data={trend} />
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12"><LoadingSpinner /></div>
+            ) : trend.length > 0 ? (
+              <ScoreTrendChart data={trend} />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <BarChart3Icon className="h-8 w-8 text-[#5a6480] mb-2" />
+                <p className="text-[#5a6480] text-sm">Run scans to build score history</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -81,32 +108,47 @@ export default function AIDebtPage() {
           <CardTitle className="text-white text-base">Repository Breakdown</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#1e2a4a]">
-                  <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Repository</th>
-                  <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">AI LOC %</th>
-                  <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Review Coverage</th>
-                  <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Risk Level</th>
-                  <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Risk Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {repos.map((repo) => (
-                  <tr key={repo.name} className="border-b border-[#1e2a4a] hover:bg-[#182040]">
-                    <td className="py-3 px-4 font-mono text-white">{repo.name}</td>
-                    <td className="py-3 px-4 font-mono text-white">{repo.aiLoc}%</td>
-                    <td className="py-3 px-4 font-mono text-white">{repo.review}%</td>
-                    <td className="py-3 px-4">
-                      <Badge variant="outline" className={`text-xs border-0 ${riskColors[repo.risk]}`}>{repo.risk}</Badge>
-                    </td>
-                    <td className="py-3 px-4 font-mono font-bold text-white">{repo.score}</td>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8"><LoadingSpinner /></div>
+          ) : repos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <BarChart3Icon className="h-8 w-8 text-[#5a6480] mb-2" />
+              <p className="text-[#8892b0] text-sm font-medium">No repository scores yet</p>
+              <p className="text-[#5a6480] text-xs mt-1">Run a governance scan to analyze your repositories.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#1e2a4a]">
+                    <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Repository</th>
+                    <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">AI LOC %</th>
+                    <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Review Coverage</th>
+                    <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Risk Level</th>
+                    <th className="text-left text-[#8892b0] text-xs uppercase py-3 px-4">Debt Score</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {repos.map((repo) => {
+                    const scoreColor = repo.score >= 80 ? 'text-green-400' : repo.score >= 60 ? 'text-amber-400' : 'text-red-400';
+                    return (
+                      <tr key={repo.repository_id} className="border-b border-[#1e2a4a] hover:bg-[#182040]">
+                        <td className="py-3 px-4 font-mono text-white">{repo.repository_name}</td>
+                        <td className="py-3 px-4 font-mono text-white">{repo.ai_loc_percentage}%</td>
+                        <td className="py-3 px-4 font-mono text-white">{repo.review_coverage}%</td>
+                        <td className="py-3 px-4">
+                          <Badge variant="outline" className={`text-xs border-0 ${riskColors[repo.risk_zone] || riskColors.unknown}`}>
+                            {repo.risk_zone}
+                          </Badge>
+                        </td>
+                        <td className={`py-3 px-4 font-mono font-bold ${scoreColor}`}>{repo.score}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

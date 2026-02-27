@@ -49,14 +49,17 @@ export async function GET(request: NextRequest) {
         score: s.score,
         risk_zone: s.risk_zone,
       })),
-      by_repository: Array.from(uniqueRepos.values()).map((s) => ({
-        repository_id: s.repository_id,
-        repository_name: (s.repository as { name: string })?.name,
-        score: s.score,
-        risk_zone: s.risk_zone,
-        ai_loc_percentage: 0,
-        review_coverage: 0,
-      })),
+      by_repository: Array.from(uniqueRepos.values()).map((s) => {
+        const bd = (s.breakdown ?? {}) as Record<string, number>;
+        return {
+          repository_id: s.repository_id,
+          repository_name: (s.repository as { name: string })?.name,
+          score: s.score,
+          risk_zone: s.risk_zone,
+          ai_loc_percentage: bd.ai_loc_ratio != null ? Math.round(bd.ai_loc_ratio * 100) : 0,
+          review_coverage: bd.review_coverage != null ? Math.round(bd.review_coverage * 100) : 0,
+        };
+      }),
     },
   });
 }
