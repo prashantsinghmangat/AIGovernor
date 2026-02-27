@@ -3,7 +3,65 @@
  * Covers XSS bypasses, unsafe HTML rendering, token storage,
  * missing rel attributes, infinite loops, and outdated patterns.
  */
-import type { VulnerabilityRule } from '../vulnerability-detector';
+import type { VulnerabilityRule, RuleMatchContext } from '../vulnerability-detector';
+
+// ---------------------------------------------------------------------------
+// Helpers for multi-line JSX / HTML tag inspection
+// ---------------------------------------------------------------------------
+
+/**
+ * Starting from `lineIndex`, walk backward/forward to collect the full
+ * opening tag that contains `target="_blank"`. Returns the concatenated
+ * tag string from `<tagName` through its closing `>`.
+ */
+function collectSurroundingTag(lines: string[], lineIndex: number): string {
+  // Walk backward to find the opening `<tagName`
+  let start = lineIndex;
+  for (let i = lineIndex; i >= Math.max(0, lineIndex - 20); i--) {
+    if (/<[a-zA-Z]/.test(lines[i])) {
+      start = i;
+      break;
+    }
+  }
+
+  // Walk forward to find the closing `>` or `/>`
+  let end = lineIndex;
+  for (let i = lineIndex; i < Math.min(lines.length, lineIndex + 20); i++) {
+    if (/\/?>/.test(lines[i])) {
+      end = i;
+      break;
+    }
+  }
+
+  return lines.slice(start, end + 1).join(' ');
+}
+
+/**
+ * Validates VULN-193: target="_blank" without rel="noopener".
+ *
+ * Suppresses false positives when:
+ * 1. The element is NOT <a> or <area> (e.g. <form>, <button>)
+ * 2. The surrounding multi-line tag already contains rel="noopener" or rel="noreferrer"
+ */
+function validateTargetBlank(ctx: RuleMatchContext): boolean {
+  const fullTag = collectSurroundingTag(ctx.lines, ctx.lineIndex);
+
+  // CWE-1022 only applies to <a> and <area> elements
+  const elementMatch = fullTag.match(/<(\w+)/);
+  if (elementMatch) {
+    const tagName = elementMatch[1].toLowerCase();
+    if (tagName !== 'a' && tagName !== 'area') {
+      return false; // Not a link element — suppress
+    }
+  }
+
+  // Check the full multi-line tag for rel="noopener" or rel="noreferrer"
+  if (/rel\s*=\s*["'][^"']*(?:noopener|noreferrer)/i.test(fullTag)) {
+    return false; // Already mitigated — suppress
+  }
+
+  return true; // Genuine finding
+}
 
 export const FRAMEWORK_RULES: VulnerabilityRule[] = [
   // ═══════════════════════════════════════════════════════════════════════════
@@ -48,14 +106,15 @@ export const FRAMEWORK_RULES: VulnerabilityRule[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'VULN-193',
-    severity: 'high',
+    severity: 'medium',
     category: 'insecure-config',
     title: 'target="_blank" Without rel="noopener"',
     description:
-      'Links with target="_blank" without rel="noopener" (or rel="noreferrer") give the opened page access to window.opener, enabling tabnabbing phishing attacks.',
-    pattern: /target\s*=\s*["']_blank["'](?![^>]*rel\s*=\s*["'][^"']*noopener)/,
+      'Links (<a> / <area>) with target="_blank" without rel="noopener" (or rel="noreferrer") give the opened page access to window.opener, enabling tabnabbing phishing attacks. Modern browsers (Chrome 88+, Firefox 79+) auto-apply noopener, but add the attribute explicitly for older browser support.',
+    pattern: /target\s*=\s*["']_blank["']/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-1022',
+    validate: validateTargetBlank,
   },
   {
     id: 'VULN-194',

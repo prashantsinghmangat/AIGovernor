@@ -13,7 +13,24 @@
  * - Weak hash algorithms
  * - Debug print statements
  */
-import type { VulnerabilityRule } from '../vulnerability-detector';
+import type { VulnerabilityRule, RuleMatchContext } from '../vulnerability-detector';
+
+/**
+ * VULN-113: Suppress yaml.load() findings when SafeLoader/safe_load
+ * appears in surrounding lines (multi-line function call).
+ */
+function validateUnsafeYamlLoad(ctx: RuleMatchContext): boolean {
+  const { lines, lineIndex } = ctx;
+  // Check current line + a few below for Loader=SafeLoader or similar safe patterns
+  for (let i = lineIndex; i < Math.min(lines.length, lineIndex + 5); i++) {
+    if (/(?:SafeLoader|safe_load|FullLoader|BaseLoader|Loader\s*=)/i.test(lines[i])) {
+      return false; // Safe loader configured — suppress
+    }
+    // Stop if we hit the closing paren of the call
+    if (i > lineIndex && /\)/.test(lines[i])) break;
+  }
+  return true;
+}
 
 export const PYTHON_RULES: VulnerabilityRule[] = [
   // ═══════════════════════════════════════════════════════════════════════════
@@ -65,9 +82,10 @@ export const PYTHON_RULES: VulnerabilityRule[] = [
     description:
       'yaml.load() without Loader=SafeLoader (or yaml.safe_load) can execute arbitrary Python objects ' +
       'embedded in the YAML document. Always use yaml.safe_load() or specify Loader=SafeLoader.',
-    pattern: /\byaml\.load\s*\([^)]*\)(?!.*Loader\s*=\s*SafeLoader)/,
+    pattern: /\byaml\.load\s*\(/,
     languages: ['Python'],
     cwe: 'CWE-502',
+    validate: validateUnsafeYamlLoad,
   },
   {
     id: 'VULN-114',
@@ -211,9 +229,10 @@ export const PYTHON_RULES: VulnerabilityRule[] = [
     title: 'Print Statement in Production Code',
     description:
       'print() statements may leak sensitive data to stdout/logs and should be replaced with a ' +
-      'proper logging framework (e.g., logging.info/debug). Ignored in test files.',
+      'proper logging framework (e.g., logging.info/debug). Skipped in test files.',
     pattern: /\bprint\s*\(\s*(?!.*#\s*noqa)/,
     languages: ['Python'],
     cwe: 'CWE-489',
+    skipTestFiles: true,
   },
 ];

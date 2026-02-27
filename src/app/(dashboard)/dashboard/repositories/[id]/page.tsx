@@ -33,10 +33,13 @@ import {
   Eye,
   Github,
   PackageIcon,
+  FileArchive,
+  Upload,
 } from "lucide-react"
 import { useRepository } from "@/hooks/use-repository"
 import { useGitHubStatus } from "@/hooks/use-github-status"
 import { useTriggerScan, useScanStatus, useScanResults } from "@/hooks/use-scan"
+import { UploadZipDialog } from "@/components/dashboard/upload-zip-dialog"
 import { toast } from "sonner"
 import { GaugeChart } from "@/components/dashboard/gauge-chart"
 import { ScoreTrendChart } from "@/components/charts/score-trend-chart"
@@ -161,6 +164,8 @@ interface DepVulnSummary {
   low: number
   total: number
   findings: DepVulnFinding[]
+  ecosystems_scanned?: string[]
+  per_ecosystem?: { ecosystem: string; manifest_file: string; total_dependencies: number; findings_count: number }[]
 }
 
 function DetectionSignalPanel({ signals }: { signals: Record<string, unknown> }) {
@@ -301,10 +306,12 @@ export default function RepositoryDetailPage() {
   const [activeScanId, setActiveScanId] = useState<string | null>(null)
   const [expandedFileId, setExpandedFileId] = useState<string | null>(null)
   const [riskFilter, setRiskFilter] = useState<"all" | "high" | "medium" | "low" | "vulns">("all")
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const fileTableRef = useRef<HTMLDivElement>(null)
 
   const { data, isLoading } = useRepository(repoId)
   const { data: githubStatus } = useGitHubStatus()
+  const isUploadRepo = data?.repository?.source === "upload"
   const { mutate: triggerScan, isPending: scanPending } = useTriggerScan()
 
   // Auto-detect running/pending scans from scan_history (survives navigation)
@@ -410,8 +417,8 @@ export default function RepositoryDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <GitBranch className="h-5 w-5 text-blue-400" />
-            <h1 className="text-2xl font-bold text-white">{repo.full_name}</h1>
+            {isUploadRepo ? <FileArchive className="h-5 w-5 text-blue-400" /> : <GitBranch className="h-5 w-5 text-blue-400" />}
+            <h1 className="text-2xl font-bold text-white">{isUploadRepo ? repo.name : repo.full_name}</h1>
             {riskZone && (
               <Badge variant={riskBadgeVariant} className="capitalize">
                 {riskZone} Risk
@@ -419,16 +426,23 @@ export default function RepositoryDetailPage() {
             )}
           </div>
           <div className="mt-1 flex items-center gap-3 text-sm text-[#8892b0]">
+            {isUploadRepo && (
+              <span className="flex items-center gap-1"><Upload className="h-3 w-3" /> Uploaded</span>
+            )}
             {repo.language && <span>{repo.language}</span>}
-            <span>&middot;</span>
-            <span>Branch: {repo.default_branch}</span>
+            {!isUploadRepo && (
+              <>
+                <span>&middot;</span>
+                <span>Branch: {repo.default_branch}</span>
+              </>
+            )}
             <span>&middot;</span>
             {repo.is_private ? (
               <span className="flex items-center gap-1"><Lock className="h-3 w-3" /> Private</span>
             ) : (
               <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> Public</span>
             )}
-            {githubStatus?.github_username && (
+            {!isUploadRepo && githubStatus?.github_username && (
               <>
                 <span>&middot;</span>
                 <span className="flex items-center gap-1">
@@ -437,7 +451,7 @@ export default function RepositoryDetailPage() {
                 </span>
               </>
             )}
-            {latestScanCommit && (
+            {!isUploadRepo && latestScanCommit && (
               <>
                 <span>&middot;</span>
                 <span className="flex items-center gap-1">
@@ -456,20 +470,29 @@ export default function RepositoryDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <a
-              href={`https://github.com/${repo.full_name}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ExternalLinkIcon className="mr-2 h-4 w-4" />
-              View on GitHub
-            </a>
-          </Button>
-          <Button size="sm" onClick={handleTriggerScan} disabled={scanPending || !!isScanning || !!runningScanFromHistory}>
-            {scanPending || isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanIcon className="mr-2 h-4 w-4" />}
-            {isScanning ? "Scanning..." : scanPending ? "Queuing..." : "Trigger Scan"}
-          </Button>
+          {!isUploadRepo && (
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href={`https://github.com/${repo.full_name}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLinkIcon className="mr-2 h-4 w-4" />
+                View on GitHub
+              </a>
+            </Button>
+          )}
+          {isUploadRepo ? (
+            <Button size="sm" onClick={() => setUploadDialogOpen(true)} disabled={!!isScanning}>
+              {isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              {isScanning ? "Scanning..." : "Upload New Version"}
+            </Button>
+          ) : (
+            <Button size="sm" onClick={handleTriggerScan} disabled={scanPending || !!isScanning || !!runningScanFromHistory}>
+              {scanPending || isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanIcon className="mr-2 h-4 w-4" />}
+              {isScanning ? "Scanning..." : scanPending ? "Queuing..." : "Trigger Scan"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -719,7 +742,7 @@ export default function RepositoryDetailPage() {
               </Badge>
             </div>
             <CardDescription className="text-[#5a6480]">
-              Known vulnerable packages found in package.json ({depVulns.total_dependencies} dependencies scanned)
+              Known vulnerable packages found in {depVulns.per_ecosystem?.[0]?.manifest_file ?? "dependencies"} ({depVulns.total_dependencies} dependencies scanned)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1254,6 +1277,15 @@ export default function RepositoryDetailPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Upload new version dialog (for upload repos) */}
+      {isUploadRepo && (
+        <UploadZipDialog
+          open={uploadDialogOpen}
+          onOpenChange={setUploadDialogOpen}
+          defaultName={repo.name}
+        />
       )}
     </div>
   )

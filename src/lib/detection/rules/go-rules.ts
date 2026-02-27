@@ -130,5 +130,6 @@ export const GO_RULES: VulnerabilityRule[] = [
     pattern: /fmt\.Print(?:ln|f)\s*\(/,
     languages: ['Go'],
     cwe: 'CWE-489',
+    skipTestFiles: true,
   },
 ];

@@ -89,9 +89,10 @@ export interface GitHubStatusData {
 export interface RepositoryWithStats {
   id: string;
   company_id: string;
-  github_id: number;
+  github_id: number | null;
   name: string;
   full_name: string;
+  source?: string;
   description: string | null;
   default_branch: string;
   language: string | null;
@@ -121,7 +122,7 @@ export interface RepositoryDetail {
   repository: {
     id: string;
     company_id: string;
-    github_id: number;
+    github_id: number | null;
     name: string;
     full_name: string;
     description: string | null;
@@ -129,6 +130,7 @@ export interface RepositoryDetail {
     language: string | null;
     is_private: boolean;
     is_active: boolean;
+    source?: string;
     last_scan_at: string | null;
     last_scan_status: string | null;
     created_at: string;

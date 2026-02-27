@@ -14,9 +14,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { repository_id, scan_type = 'full' } = body;
 
+  // For bulk scans (no specific repo), only scan GitHub repos — upload repos need a new ZIP to re-scan
   const repos = repository_id
     ? [{ id: repository_id }]
-    : (await supabase.from('repositories').select('id').eq('company_id', profile.company_id).eq('is_active', true)).data || [];
+    : (await supabase.from('repositories').select('id').eq('company_id', profile.company_id).eq('is_active', true).eq('source', 'github')).data || [];
 
   const scanInserts = repos.map((repo) => ({
     company_id: profile.company_id,

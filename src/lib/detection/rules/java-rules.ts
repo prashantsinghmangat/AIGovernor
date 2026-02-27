@@ -5,7 +5,21 @@
  * validation, path traversal, exception handling, LDAP injection, and
  * debug logging.
  */
-import type { VulnerabilityRule } from '../vulnerability-detector';
+import type { VulnerabilityRule, RuleMatchContext } from '../vulnerability-detector';
+
+/**
+ * VULN-136: Check surrounding lines for setFeature() call that secures
+ * the DocumentBuilderFactory — handles multi-line configurations.
+ */
+function validateXxeDocumentBuilder(ctx: RuleMatchContext): boolean {
+  const { lines, lineIndex } = ctx;
+  // Check next 15 lines for setFeature (factory config usually follows immediately)
+  for (let i = lineIndex; i < Math.min(lines.length, lineIndex + 15); i++) {
+    if (/setFeature\s*\(/.test(lines[i])) return false;
+    if (/setXIncludeAware\s*\(\s*false/.test(lines[i])) return false;
+  }
+  return true;
+}
 
 export const JAVA_RULES: VulnerabilityRule[] = [
   // ═══════════════════════════════════════════════════════════════════════════
@@ -92,10 +106,10 @@ export const JAVA_RULES: VulnerabilityRule[] = [
     title: 'XML External Entity (XXE) via DocumentBuilderFactory',
     description:
       'DocumentBuilderFactory without disabling external entities is vulnerable to XXE attacks. Call setFeature to disable DOCTYPE declarations and external entities.',
-    pattern:
-      /DocumentBuilderFactory\s*\.\s*newInstance\s*\(\s*\)(?![\s\S]{0,200}setFeature)/,
+    pattern: /DocumentBuilderFactory\s*\.\s*newInstance\s*\(\s*\)/,
     languages: ['Java', 'Kotlin'],
     cwe: 'CWE-611',
+    validate: validateXxeDocumentBuilder,
   },
   {
     id: 'VULN-137',
@@ -198,5 +212,6 @@ export const JAVA_RULES: VulnerabilityRule[] = [
     pattern: /System\s*\.\s*(?:out|err)\s*\.\s*println\s*\(/,
     languages: ['Java', 'Kotlin'],
     cwe: 'CWE-489',
+    skipTestFiles: true,
   },
 ];

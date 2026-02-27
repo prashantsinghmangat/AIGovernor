@@ -117,7 +117,7 @@ export interface Database {
         Row: {
           id: string;
           company_id: string;
-          github_id: number;
+          github_id: number | null;
           name: string;
           full_name: string;
           description: string | null;
@@ -125,6 +125,7 @@ export interface Database {
           language: string | null;
           is_private: boolean;
           is_active: boolean;
+          source: string;
           webhook_id: number | null;
           webhook_secret: string | null;
           last_scan_at: string | null;
@@ -136,7 +137,7 @@ export interface Database {
         Insert: {
           id?: string;
           company_id: string;
-          github_id: number;
+          github_id?: number | null;
           name: string;
           full_name: string;
           description?: string | null;
@@ -144,6 +145,7 @@ export interface Database {
           language?: string | null;
           is_private?: boolean;
           is_active?: boolean;
+          source?: string;
           webhook_id?: number | null;
           webhook_secret?: string | null;
           last_scan_at?: string | null;
@@ -155,7 +157,7 @@ export interface Database {
         Update: {
           id?: string;
           company_id?: string;
-          github_id?: number;
+          github_id?: number | null;
           name?: string;
           full_name?: string;
           description?: string | null;
@@ -163,6 +165,7 @@ export interface Database {
           language?: string | null;
           is_private?: boolean;
           is_active?: boolean;
+          source?: string;
           webhook_id?: number | null;
           webhook_secret?: string | null;
           last_scan_at?: string | null;

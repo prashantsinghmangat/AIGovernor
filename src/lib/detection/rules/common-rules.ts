@@ -2,7 +2,38 @@
  * Language-agnostic vulnerability rules — apply to all languages.
  * Secrets, credentials, universal patterns.
  */
-import type { VulnerabilityRule } from '../vulnerability-detector';
+import type { VulnerabilityRule, RuleMatchContext } from '../vulnerability-detector';
+
+/**
+ * Suppress hardcoded-password findings when the value looks like a
+ * placeholder, example, or environment-variable reference.
+ */
+function validateHardcodedPassword(ctx: RuleMatchContext): boolean {
+  const line = ctx.lines[ctx.lineIndex];
+  // Common placeholder / example values
+  if (/['"](?:test|example|demo|placeholder|changeme|change_me|dummy|TODO|xxx|your[_-]|REPLACE|<)/i.test(line)) {
+    return false;
+  }
+  // Environment variable pattern: password = process.env.X or os.environ[X]
+  if (/[:=]\s*(?:process\.env|os\.environ|System\.getenv|ENV\[)/i.test(line)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Suppress hardcoded-API-key findings for test/demo/public keys.
+ */
+function validateHardcodedApiKey(ctx: RuleMatchContext): boolean {
+  const line = ctx.lines[ctx.lineIndex];
+  if (/['"](?:test|example|demo|placeholder|public|dummy|TODO|xxx|your[_-]|REPLACE|<)/i.test(line)) {
+    return false;
+  }
+  if (/[:=]\s*(?:process\.env|os\.environ|System\.getenv|ENV\[)/i.test(line)) {
+    return false;
+  }
+  return true;
+}
 
 export const COMMON_RULES: VulnerabilityRule[] = [
   // ═══════════════════════════════════════════════════════════════════════════
@@ -19,6 +50,7 @@ export const COMMON_RULES: VulnerabilityRule[] = [
     title: 'Hardcoded Password',
     description: 'Passwords in source code can be extracted by anyone with repo access. Use environment variables or a vault.',
     pattern: /(?:password|passwd|pwd)\s*[:=]\s*['"][^'"]{8,}['"]/i, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+    skipTestFiles: true, validate: validateHardcodedPassword,
   },
   {
     id: 'VULN-003', severity: 'critical', category: 'hardcoded-secret',
@@ -26,6 +58,7 @@ export const COMMON_RULES: VulnerabilityRule[] = [
     description: 'API keys and tokens should be stored in environment variables, not in code.',
     pattern: /(?:api[_-]?key|apikey|secret[_-]?key|auth[_-]?token|access[_-]?token)\s*[:=]\s*['"][^'"]{8,}['"]/i,
     languages: '*', cwe: 'CWE-798', truncateMatch: true,
+    skipTestFiles: true, validate: validateHardcodedApiKey,
   },
   {
     id: 'VULN-004', severity: 'critical', category: 'hardcoded-secret',

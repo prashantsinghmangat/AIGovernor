@@ -6,7 +6,53 @@
  * prototype pollution, NoSQL injection, SSRF, CSRF, timing attacks,
  * deprecated APIs, and production-readiness.
  */
-import type { VulnerabilityRule } from '../vulnerability-detector';
+import type { VulnerabilityRule, RuleMatchContext } from '../vulnerability-detector';
+
+// ---------------------------------------------------------------------------
+// Shared validators — reduce false positives with context awareness
+// ---------------------------------------------------------------------------
+
+/**
+ * For VULN-024 (Sensitive Data in Logs): suppress when the keyword only
+ * appears inside a string literal (message text), not as a variable reference.
+ */
+function validateSensitiveLog(ctx: RuleMatchContext): boolean {
+  const line = ctx.lines[ctx.lineIndex];
+  // Strip all quoted strings and check if a sensitive keyword still remains
+  const stripped = line.replace(/(['"`])(?:(?!\1).)*\1/g, '""');
+  return /(?:password|secret|token|apiKey|api_key|credential)/i.test(stripped);
+}
+
+/**
+ * For VULN-027 (Insecure Cookie — Secure Flag): only flag when in a
+ * cookie / session configuration context, not random `secure: false` props.
+ */
+function validateSecureFalse(ctx: RuleMatchContext): boolean {
+  const { lines, lineIndex } = ctx;
+  // Check current line and 10 lines above for cookie/session context
+  for (let i = lineIndex; i >= Math.max(0, lineIndex - 10); i--) {
+    if (/(?:cookie|session|sameSite|httpOnly|maxAge|Set-Cookie|express-session|cookie-parser)/i.test(lines[i])) {
+      return true;
+    }
+  }
+  return false; // No cookie context — suppress
+}
+
+/**
+ * For VULN-061 (JWT Without Expiration): check surrounding lines for
+ * expiresIn / exp configuration that may be on a different line.
+ */
+function validateJwtNoExpiry(ctx: RuleMatchContext): boolean {
+  const { lines, lineIndex } = ctx;
+  for (let i = lineIndex; i < Math.min(lines.length, lineIndex + 8); i++) {
+    if (/(?:expiresIn|exp\s*:|maxAge)/i.test(lines[i])) return false;
+  }
+  // Also check if the sign call has a third argument object (options) nearby
+  for (let i = Math.max(0, lineIndex - 3); i <= lineIndex; i++) {
+    if (/(?:expiresIn|exp\s*:|maxAge)/i.test(lines[i])) return false;
+  }
+  return true;
+}
 
 export const JS_TS_RULES: VulnerabilityRule[] = [
   // ═══════════════════════════════════════════════════════════════════════════
@@ -22,6 +68,7 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     pattern: /\beval\s*\(\s*(?!['"`])[^)]+\)/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-95',
+    skipTestFiles: true,
   },
   {
     id: 'VULN-006',
@@ -67,7 +114,7 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     title: 'dangerouslySetInnerHTML Usage',
     description:
       'dangerouslySetInnerHTML bypasses React XSS protections. Sanitize input with DOMPurify or similar.',
-    pattern: /dangerouslySetInnerHTML/,
+    pattern: /dangerouslySetInnerHTML\s*[=:{]/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-79',
   },
@@ -250,6 +297,8 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     pattern: /console\.log\s*\(.*(?:password|secret|token|apiKey|api_key|credential)/i,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-532',
+    skipTestFiles: true,
+    validate: validateSensitiveLog,
   },
   {
     id: 'VULN-025',
@@ -261,6 +310,7 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     pattern: /^\s*debugger\s*;?\s*$/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-489',
+    skipTestFiles: true,
   },
   {
     id: 'VULN-026',
@@ -283,6 +333,7 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     pattern: /(?<![A-Za-z])secure\s*:\s*false/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-614',
+    validate: validateSecureFalse,
   },
   {
     id: 'VULN-029',
@@ -316,6 +367,7 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     pattern: /catch\s*\([^)]*\)\s*\{\s*\}/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-390',
+    skipTestFiles: true,
   },
   {
     id: 'VULN-061',
@@ -324,9 +376,10 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     title: 'JWT Without Expiration',
     description:
       'JWTs without expiration (no expiresIn option) remain valid forever if compromised. Always set an expiration time.',
-    pattern: /jwt\.sign\s*\([^)]*\)\s*(?!.*expiresIn)/,
+    pattern: /jwt\.sign\s*\(/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-613',
+    validate: validateJwtNoExpiry,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -364,6 +417,7 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     pattern: /(?<![.\w])alert\s*\(\s*['"`]/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-489',
+    skipTestFiles: true,
   },
   {
     id: 'VULN-034',
@@ -385,6 +439,7 @@ export const JS_TS_RULES: VulnerabilityRule[] = [
     pattern: /console\.error\s*\(\s*(?:err|error|e)\s*\)/,
     languages: ['JavaScript', 'TypeScript'],
     cwe: 'CWE-209',
+    skipTestFiles: true,
   },
   {
     id: 'VULN-038',

@@ -130,5 +130,6 @@ export const CSHARP_RULES: VulnerabilityRule[] = [
     pattern: /Console\.Write(?:Line)?\s*\(/,
     languages: ['C#'],
     cwe: 'CWE-489',
+    skipTestFiles: true,
   },
 ];

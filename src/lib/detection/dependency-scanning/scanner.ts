@@ -22,13 +22,24 @@ import { composerAdapter } from './composer-adapter';
 import { nugetAdapter } from './nuget-adapter';
 
 // ---------------------------------------------------------------------------
-// Lightweight semver helpers (handles simple "<X.Y.Z" ranges only)
+// Lightweight semver helpers — supports <, <=, >=, ranges, and || disjunction
 // ---------------------------------------------------------------------------
 
 function parseVersion(v: string): [number, number, number] | null {
-  const m = v.match(/^(\d+)\.(\d+)\.(\d+)/);
+  const m = v.match(/(\d+)\.(\d+)\.(\d+)/);
   if (!m) return null;
   return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+
+function compareTuples(
+  a: [number, number, number],
+  b: [number, number, number],
+): -1 | 0 | 1 {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] < b[i]) return -1;
+    if (a[i] > b[i]) return 1;
+  }
+  return 0;
 }
 
 /** Returns true if `version` < `target` */
@@ -36,9 +47,23 @@ export function versionLessThan(version: string, target: string): boolean {
   const a = parseVersion(version);
   const b = parseVersion(target);
   if (!a || !b) return false;
-  if (a[0] !== b[0]) return a[0] < b[0];
-  if (a[1] !== b[1]) return a[1] < b[1];
-  return a[2] < b[2];
+  return compareTuples(a, b) < 0;
+}
+
+/** Returns true if `version` <= `target` */
+export function versionLessThanOrEqual(version: string, target: string): boolean {
+  const a = parseVersion(version);
+  const b = parseVersion(target);
+  if (!a || !b) return false;
+  return compareTuples(a, b) <= 0;
+}
+
+/** Returns true if `version` >= `target` */
+export function versionGreaterThanOrEqual(version: string, target: string): boolean {
+  const a = parseVersion(version);
+  const b = parseVersion(target);
+  if (!a || !b) return false;
+  return compareTuples(a, b) >= 0;
 }
 
 /**
@@ -52,12 +77,43 @@ export function cleanVersion(version: string): string | null {
 }
 
 /**
- * Check if `version` satisfies a simple vulnerable range like "<3.0.5".
- * Only supports the `<X.Y.Z` format used in our advisory DB.
+ * Check if `version` satisfies a vulnerable range.
+ *
+ * Supported formats:
+ *   "<3.0.5"                  — strictly less than
+ *   "<=3.1.3"                 — less than or equal
+ *   ">=1.0.0 <1.13.5"        — range (inclusive lower, exclusive upper)
+ *   ">=1.0.0 <=1.13.4"       — range (inclusive both)
+ *   "<=3.1.3 || >=9.0.0 <=9.0.6"  — disjunction of ranges
  */
 function isVulnerable(version: string, range: string): boolean {
-  const ltMatch = range.match(/^<\s*(.+)$/);
+  // Handle || disjunction: if ANY sub-range matches, it's vulnerable
+  if (range.includes('||')) {
+    return range.split('||').some((sub) => isVulnerable(version, sub.trim()));
+  }
+
+  // Trim whitespace
+  const r = range.trim();
+
+  // Range: ">=X.Y.Z <A.B.C" or ">=X.Y.Z <=A.B.C"
+  const rangeMatch = r.match(/^>=\s*(\S+)\s+(<=?)\s*(\S+)$/);
+  if (rangeMatch) {
+    const lower = rangeMatch[1];
+    const op = rangeMatch[2];
+    const upper = rangeMatch[3];
+    const aboveLower = versionGreaterThanOrEqual(version, lower);
+    const belowUpper = op === '<=' ? versionLessThanOrEqual(version, upper) : versionLessThan(version, upper);
+    return aboveLower && belowUpper;
+  }
+
+  // Simple: "<=X.Y.Z"
+  const lteMatch = r.match(/^<=\s*(.+)$/);
+  if (lteMatch) return versionLessThanOrEqual(version, lteMatch[1]);
+
+  // Simple: "<X.Y.Z"
+  const ltMatch = r.match(/^<\s*(.+)$/);
   if (ltMatch) return versionLessThan(version, ltMatch[1]);
+
   return false;
 }
 
@@ -97,6 +153,10 @@ export async function scanAllDependencies(
   const filePaths = tree.map((f) => f.path);
 
   for (const adapter of adapters) {
+    // Track directories we've already scanned for this adapter
+    // (avoids scanning both package-lock.json AND package.json in same dir)
+    const scannedDirs = new Set<string>();
+
     // Find matching manifest files in the tree
     for (const manifestName of adapter.manifestFiles) {
       // Match files at root or any depth (e.g., "package.json", "backend/requirements.txt")
@@ -112,12 +172,18 @@ export async function scanAllDependencies(
       });
 
       for (const manifestPath of rootManifests) {
+        // Skip if we already scanned a higher-priority manifest in this directory
+        // (e.g., package-lock.json takes priority over package.json)
+        const dir = manifestPath.split('/').slice(0, -1).join('/') || '.';
+        if (scannedDirs.has(dir)) continue;
         try {
           const content = await fetchFile(manifestPath);
           if (!content) continue;
 
           const deps = adapter.parseManifest(content);
           if (deps.size === 0) continue;
+
+          console.log(`[DepScanner] Scanning ${manifestPath} (${adapter.ecosystem}): ${deps.size} dependencies found`);
 
           const advisoryDb = adapter.getAdvisories();
           const findings: DependencyVulnerability[] = [];
@@ -148,6 +214,8 @@ export async function scanAllDependencies(
               }
             }
           }
+
+          scannedDirs.add(dir);
 
           results.push({
             ecosystem: adapter.ecosystem,

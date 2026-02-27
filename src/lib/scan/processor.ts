@@ -87,6 +87,13 @@ export async function processPendingScan(): Promise<{
   }
 
   const scanId = pendingScan.id;
+
+  // Route upload scans to the dedicated processor
+  if (pendingScan.scan_type === 'upload') {
+    const { processUploadScan } = await import('./upload-processor');
+    return processUploadScan(scanId);
+  }
+
   const repo = pendingScan.repository as {
     id: string;
     company_id: string;
@@ -247,7 +254,7 @@ export async function processPendingScan(): Promise<{
           const loc = content.split('\n').length;
 
           const detection = await detectAICode(content, language, latestCommitMessage);
-          const vulnerabilities = detectVulnerabilities(content, language);
+          const vulnerabilities = detectVulnerabilities(content, language, file.path);
           const codeQuality = detectCodeQuality(content, language);
           const enhancements = detectEnhancements(content, language);
 

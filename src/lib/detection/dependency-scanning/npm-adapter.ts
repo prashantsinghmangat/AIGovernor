@@ -24,6 +24,36 @@ const NPM_ADVISORY_DB: Record<string, Advisory[]> = {
       ghsa: 'GHSA-f8q6-p94x-37v3',
       url: 'https://nvd.nist.gov/vuln/detail/CVE-2022-3517',
     },
+    {
+      id: 'DEP-046',
+      severity: 'high',
+      title: 'Minimatch ReDoS via Repeated Wildcards',
+      description: 'Versions <=3.1.3 are vulnerable to ReDoS via repeated wildcards with non-matching literals in pattern strings.',
+      vulnerable_range: '<=3.1.3',
+      patched_version: '3.1.4',
+      ghsa: 'GHSA-3ppc-4f35-3m26',
+      url: 'https://github.com/advisories/GHSA-3ppc-4f35-3m26',
+    },
+    {
+      id: 'DEP-047',
+      severity: 'high',
+      title: 'Minimatch ReDoS via GLOBSTAR Segments',
+      description: 'Versions 9.0.0-9.0.6 are vulnerable to combinatorial backtracking via multiple non-adjacent GLOBSTAR segments.',
+      vulnerable_range: '>=9.0.0 <=9.0.6',
+      patched_version: '9.0.7',
+      ghsa: 'GHSA-7r86-cg39-jmmj',
+      url: 'https://github.com/advisories/GHSA-7r86-cg39-jmmj',
+    },
+    {
+      id: 'DEP-048',
+      severity: 'high',
+      title: 'Minimatch ReDoS via Nested Extglobs',
+      description: 'Versions 10.0.0-10.2.2 are vulnerable to catastrophic backtracking via nested *() extglobs in patterns.',
+      vulnerable_range: '>=10.0.0 <=10.2.2',
+      patched_version: '10.2.3',
+      ghsa: 'GHSA-23c5-xmqv-rm74',
+      url: 'https://github.com/advisories/GHSA-23c5-xmqv-rm74',
+    },
   ],
   'glob-parent': [
     {
@@ -72,6 +102,16 @@ const NPM_ADVISORY_DB: Record<string, Advisory[]> = {
       cve: 'CVE-2023-45857',
       ghsa: 'GHSA-wf5p-g6vw-rhxx',
       url: 'https://nvd.nist.gov/vuln/detail/CVE-2023-45857',
+    },
+    {
+      id: 'DEP-049',
+      severity: 'high',
+      title: 'Axios DoS via __proto__ Key in mergeConfig',
+      description: 'Versions 1.0.0 through 1.13.4 are vulnerable to Denial of Service via __proto__ key in the mergeConfig function, allowing prototype pollution to crash the application.',
+      vulnerable_range: '>=1.0.0 <=1.13.4',
+      patched_version: '1.8.0',
+      ghsa: 'GHSA-43fc-jf86-j433',
+      url: 'https://github.com/advisories/GHSA-43fc-jf86-j433',
     },
   ],
   semver: [
@@ -567,42 +607,248 @@ const NPM_ADVISORY_DB: Record<string, Advisory[]> = {
       ghsa: 'GHSA-qwcr-r2fm-qrc7',
     },
   ],
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Build tool / dev dependency vulnerabilities (DEP-050+)
+  // ═══════════════════════════════════════════════════════════════════════════
+  rollup: [
+    {
+      id: 'DEP-050',
+      severity: 'high',
+      title: 'Rollup Arbitrary File Write via Path Traversal',
+      description: 'Rollup versions 4.0.0 through 4.58.0 are vulnerable to arbitrary file write when processing crafted code-splitting build inputs with path traversal sequences.',
+      vulnerable_range: '>=4.0.0 <=4.58.0',
+      patched_version: '4.58.1',
+      ghsa: 'GHSA-mw96-cpmx-2vgc',
+      url: 'https://github.com/advisories/GHSA-mw96-cpmx-2vgc',
+    },
+  ],
+  storybook: [
+    {
+      id: 'DEP-051',
+      severity: 'high',
+      title: 'Storybook Dev Server WebSocket Hijacking',
+      description: 'Storybook versions 8.1.0 through 8.6.16 are vulnerable to WebSocket hijacking in the dev server, allowing attackers to execute arbitrary code via a malicious webpage.',
+      vulnerable_range: '>=8.1.0 <=8.6.16',
+      patched_version: '8.6.17',
+      ghsa: 'GHSA-mjf5-7g4m-gx5w',
+      url: 'https://github.com/advisories/GHSA-mjf5-7g4m-gx5w',
+    },
+  ],
+  vite: [
+    {
+      id: 'DEP-052',
+      severity: 'high',
+      title: 'Vite Dev Server Arbitrary File Read',
+      description: 'Vite dev server versions before 5.4.12 (or 6.0.9 for 6.x) are vulnerable to arbitrary file read via crafted URL paths bypassing the fs.allow restriction.',
+      vulnerable_range: '<5.4.12',
+      patched_version: '5.4.12',
+      cve: 'CVE-2025-0290',
+      ghsa: 'GHSA-vg6x-rcgg-rjx6',
+      url: 'https://github.com/advisories/GHSA-vg6x-rcgg-rjx6',
+    },
+  ],
+  next: [
+    {
+      id: 'DEP-053',
+      severity: 'high',
+      title: 'Next.js Authorization Bypass via Middleware',
+      description: 'Next.js versions before 14.2.25 (or 15.2.3 for 15.x) are vulnerable to authorization bypass when x-middleware-subrequest header is set, skipping middleware checks.',
+      vulnerable_range: '<14.2.25',
+      patched_version: '14.2.25',
+      cve: 'CVE-2025-29927',
+      ghsa: 'GHSA-f82v-jh6r-w458',
+      url: 'https://github.com/advisories/GHSA-f82v-jh6r-w458',
+    },
+  ],
+  esbuild: [
+    {
+      id: 'DEP-054',
+      severity: 'medium',
+      title: 'esbuild Dev Server Directory Traversal',
+      description: 'esbuild serve mode before 0.25.0 is vulnerable to directory traversal on case-insensitive file systems, allowing reading files outside the serve directory.',
+      vulnerable_range: '<0.25.0',
+      patched_version: '0.25.0',
+      ghsa: 'GHSA-67mh-4wv8-2f99',
+      url: 'https://github.com/advisories/GHSA-67mh-4wv8-2f99',
+    },
+  ],
+  'micromatch': [
+    {
+      id: 'DEP-055',
+      severity: 'high',
+      title: 'Micromatch ReDoS via Nested Braces',
+      description: 'Micromatch versions before 4.0.8 are vulnerable to Regular Expression Denial of Service via deeply nested brace expansion patterns.',
+      vulnerable_range: '<4.0.8',
+      patched_version: '4.0.8',
+      cve: 'CVE-2024-4067',
+      ghsa: 'GHSA-952p-6rrq-rcjv',
+      url: 'https://github.com/advisories/GHSA-952p-6rrq-rcjv',
+    },
+  ],
+  'tar-fs': [
+    {
+      id: 'DEP-056',
+      severity: 'high',
+      title: 'tar-fs Arbitrary File Write via Path Traversal',
+      description: 'tar-fs versions before 2.1.2 (or 3.0.6 for 3.x) are vulnerable to arbitrary file write via path traversal in tar archive entries.',
+      vulnerable_range: '<2.1.2',
+      patched_version: '2.1.2',
+      cve: 'CVE-2024-12905',
+      ghsa: 'GHSA-rr2j-5w83-r6g2',
+      url: 'https://github.com/advisories/GHSA-rr2j-5w83-r6g2',
+    },
+  ],
 };
 
 // ---------------------------------------------------------------------------
 // npm adapter
 // ---------------------------------------------------------------------------
 
+/**
+ * Parse package-lock.json (lockfile v2/v3) to extract exact resolved versions.
+ * The `packages` field maps "node_modules/<name>" → { version: "1.2.3" }.
+ * Handles nested/transitive deps like "node_modules/foo/node_modules/bar".
+ *
+ * When the same package appears at multiple depths (e.g. minimatch@9.0.5 at
+ * root AND minimatch@3.1.2 nested inside @eslint/config-array), we keep the
+ * LOWEST version so that vulnerability checks are conservative.
+ */
+function parseLockfile(content: string): Map<string, string> {
+  const deps = new Map<string, string>();
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return deps;
+  }
+
+  // lockfileVersion 2+ uses "packages" key
+  const packages = parsed.packages as Record<string, { version?: string }> | undefined;
+  if (packages) {
+    for (const [key, meta] of Object.entries(packages)) {
+      if (!key || !meta?.version) continue;
+
+      // Extract package name from the LAST node_modules/ segment so that
+      // nested transitive deps are correctly identified:
+      //   "node_modules/axios"                                        → "axios"
+      //   "node_modules/@scope/pkg"                                   → "@scope/pkg"
+      //   "node_modules/@eslint/config-array/node_modules/minimatch"  → "minimatch"
+      //   "node_modules/storybook/node_modules/@storybook/core"       → "@storybook/core"
+      const lastNmIdx = key.lastIndexOf('node_modules/');
+      if (lastNmIdx === -1) continue;
+      const name = key.slice(lastNmIdx + 'node_modules/'.length);
+      if (!name || name.startsWith('.')) continue;
+
+      // For duplicate packages at different depths, keep the lowest version
+      // (more likely to be affected by security advisories)
+      const existing = deps.get(name);
+      if (!existing) {
+        deps.set(name, meta.version);
+      } else if (isLowerVersion(meta.version, existing)) {
+        deps.set(name, meta.version);
+      }
+    }
+    return deps;
+  }
+
+  // lockfileVersion 1 uses nested "dependencies" objects
+  const dependencies = parsed.dependencies as
+    | Record<string, { version?: string; dependencies?: Record<string, unknown> }>
+    | undefined;
+  if (dependencies) {
+    collectV1Deps(dependencies, deps);
+  }
+
+  return deps;
+}
+
+/** Simple semver comparison: returns true if `a` < `b` */
+function isLowerVersion(a: string, b: string): boolean {
+  const am = a.match(/^(\d+)\.(\d+)\.(\d+)/);
+  const bm = b.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!am || !bm) return false;
+  for (let i = 1; i <= 3; i++) {
+    const ai = parseInt(am[i], 10);
+    const bi = parseInt(bm[i], 10);
+    if (ai < bi) return true;
+    if (ai > bi) return false;
+  }
+  return false;
+}
+
+/** Recursively collect dependencies from lockfileVersion 1 nested structure */
+function collectV1Deps(
+  node: Record<string, { version?: string; dependencies?: Record<string, unknown> }>,
+  deps: Map<string, string>,
+): void {
+  for (const [name, meta] of Object.entries(node)) {
+    if (!meta?.version) continue;
+    const existing = deps.get(name);
+    if (!existing) {
+      deps.set(name, meta.version);
+    } else if (isLowerVersion(meta.version, existing)) {
+      deps.set(name, meta.version);
+    }
+    // Recurse into nested dependencies
+    if (meta.dependencies) {
+      collectV1Deps(
+        meta.dependencies as Record<string, { version?: string; dependencies?: Record<string, unknown> }>,
+        deps,
+      );
+    }
+  }
+}
+
+/**
+ * Parse package.json to extract dependency version ranges.
+ */
+function parsePackageJson(content: string): Map<string, string> {
+  const deps = new Map<string, string>();
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return deps;
+  }
+
+  const dependencies = parsed.dependencies as Record<string, string> | undefined;
+  const devDependencies = parsed.devDependencies as Record<string, string> | undefined;
+
+  if (dependencies) {
+    for (const [name, version] of Object.entries(dependencies)) {
+      deps.set(name, version);
+    }
+  }
+
+  if (devDependencies) {
+    for (const [name, version] of Object.entries(devDependencies)) {
+      deps.set(name, version);
+    }
+  }
+
+  return deps;
+}
+
 export const npmAdapter: DependencyAdapter = {
   ecosystem: 'npm',
-  manifestFiles: ['package.json'],
+  manifestFiles: ['package-lock.json', 'package.json'],
 
   parseManifest(content: string): Map<string, string> {
-    const deps = new Map<string, string>();
-
+    // Detect lockfile vs package.json by checking for lockfileVersion
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(content);
     } catch {
-      return deps;
+      return new Map();
     }
 
-    const dependencies = parsed.dependencies as Record<string, string> | undefined;
-    const devDependencies = parsed.devDependencies as Record<string, string> | undefined;
-
-    if (dependencies) {
-      for (const [name, version] of Object.entries(dependencies)) {
-        deps.set(name, version);
-      }
+    if ('lockfileVersion' in parsed) {
+      return parseLockfile(content);
     }
-
-    if (devDependencies) {
-      for (const [name, version] of Object.entries(devDependencies)) {
-        deps.set(name, version);
-      }
-    }
-
-    return deps;
+    return parsePackageJson(content);
   },
 
   getAdvisories(): Record<string, Advisory[]> {
