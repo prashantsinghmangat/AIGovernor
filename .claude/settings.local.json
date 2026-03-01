@@ -63,7 +63,11 @@
       "Bash(sed -n '100,400p' /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/page.tsx)",
       "Bash(wc -l /d/Project/AIGovernor/src/lib/detection/code-quality/rules/*.ts)",
       "Bash(grep -c \"id:\" /d/Project/AIGovernor/src/lib/detection/enhancements/rules/*.ts)",
-      "Bash(ls -la d:/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/)"
+      "Bash(ls -la d:/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/repositories/[id]/)",
+      "Bash(npx tsc --noEmit --pretty)",
+      "Bash(grep -r \"category:\" src/lib/detection/rules/*.ts)",
+      "Bash(grep -r \"languages:\" src/lib/detection/rules/*.ts)",
+      "Bash(ls -1 src/lib/detection/dependency-scanning/*adapter.ts)"
     ]
   }
 }

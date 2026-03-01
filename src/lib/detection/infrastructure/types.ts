@@ -1,5 +1,5 @@
 export type InfraSeverity = 'critical' | 'high' | 'medium' | 'low';
-export type InfraFileType = 'dockerfile' | 'github-actions' | 'docker-compose';
+export type InfraFileType = 'dockerfile' | 'github-actions' | 'docker-compose' | 'kubernetes' | 'terraform';
 
 export interface InfraRule {
   id: string;

@@ -17,6 +17,7 @@ import { JS_TS_QUALITY_RULES } from './rules/js-ts-quality';
 import { PYTHON_QUALITY_RULES } from './rules/python-quality';
 import { JAVA_QUALITY_RULES } from './rules/java-quality';
 import { GO_QUALITY_RULES } from './rules/go-quality';
+import { DEAD_CODE_QUALITY_RULES } from './rules/dead-code-quality';
 
 // ---------------------------------------------------------------------------
 // All quality rules
@@ -28,6 +29,7 @@ const ALL_QUALITY_RULES: CodeQualityRule[] = [
   ...PYTHON_QUALITY_RULES,
   ...JAVA_QUALITY_RULES,
   ...GO_QUALITY_RULES,
+  ...DEAD_CODE_QUALITY_RULES,
 ];
 
 // ---------------------------------------------------------------------------

@@ -132,6 +132,85 @@ export const COMMON_RULES: VulnerabilityRule[] = [
     description: 'Mailgun API keys allow sending emails and managing domains. Use environment variables.',
     pattern: /key-[A-Za-z0-9]{32}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
   },
+  // ─── Expanded secret patterns ───────────────────────────────────────────
+  {
+    id: 'VULN-105', severity: 'critical', category: 'hardcoded-secret',
+    title: 'Slack Bot / User OAuth Token',
+    description: 'Slack OAuth tokens (xoxb-, xoxp-, xoxa-) grant access to workspaces and channels. Rotate immediately.',
+    pattern: /xox[bpas]-[0-9A-Za-z]{10,}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-106', severity: 'critical', category: 'hardcoded-secret',
+    title: 'NPM Publish Token',
+    description: 'npm automation/publish tokens (npm_) grant registry publish rights. Store in CI secrets.',
+    pattern: /npm_[A-Za-z0-9]{36}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-107', severity: 'critical', category: 'hardcoded-secret',
+    title: 'GitLab Personal Access Token',
+    description: 'GitLab PATs (glpat-) provide broad API access. Use environment variables or CI/CD variables.',
+    pattern: /glpat-[A-Za-z0-9_-]{20}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-108', severity: 'critical', category: 'hardcoded-secret',
+    title: 'Shopify Access Token',
+    description: 'Shopify private app tokens (shpat_, shpss_) provide store access. Store in environment variables.',
+    pattern: /shp(?:at|ss|ca|pa)_[A-Za-z0-9]{32}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-109', severity: 'critical', category: 'hardcoded-secret',
+    title: 'Cloudflare API Token or Key',
+    description: 'Cloudflare API tokens grant DNS, firewall, and CDN management access. Use environment variables.',
+    pattern: /(?:CF_API_TOKEN|CLOUDFLARE_API_TOKEN)\s*[:=]\s*['"][A-Za-z0-9_-]{40,}['"]/, languages: '*', cwe: 'CWE-798', truncateMatch: true, skipTestFiles: true, validate: validateHardcodedApiKey,
+  },
+  {
+    id: 'VULN-110', severity: 'critical', category: 'hardcoded-secret',
+    title: 'DigitalOcean Personal Access Token',
+    description: 'DigitalOcean PATs grant full account access. Store in environment variables or secrets manager.',
+    pattern: /dop_v1_[A-Za-z0-9]{64}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-111', severity: 'critical', category: 'hardcoded-secret',
+    title: 'Heroku API Key',
+    description: 'Heroku API keys allow deploying apps and accessing account resources. Use environment variables.',
+    pattern: /(?:HEROKU_API_KEY)\s*[:=]\s*['"][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}['"]/, languages: '*', cwe: 'CWE-798', truncateMatch: true, skipTestFiles: true, validate: validateHardcodedApiKey,
+  },
+  {
+    id: 'VULN-112', severity: 'critical', category: 'hardcoded-secret',
+    title: 'Terraform Cloud Token',
+    description: 'Terraform Cloud API tokens (atfc.) enable infrastructure provisioning. Store in CI/CD secrets.',
+    pattern: /atfc\.[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9]{62}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-113', severity: 'critical', category: 'hardcoded-secret',
+    title: 'AWS Temporary Session Token',
+    description: 'AWS session tokens (FQoGZXIvYXdz prefix) are short-lived but must not appear in source code.',
+    pattern: /FQoGZXIvYXdz[A-Za-z0-9+/=]{40,}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-114', severity: 'critical', category: 'hardcoded-secret',
+    title: 'Discord Bot Token',
+    description: 'Discord bot tokens allow full bot account control. Regenerate immediately if exposed.',
+    pattern: /[MN][A-Za-z0-9]{23}\.[\w-]{6}\.[\w-]{27}/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-115', severity: 'critical', category: 'hardcoded-secret',
+    title: 'Vercel API Token',
+    description: 'Vercel tokens allow deploying projects and accessing team resources. Store in CI secrets.',
+    pattern: /(?:VERCEL_TOKEN|vercel_token)\s*[:=]\s*['"][A-Za-z0-9]{24}['"]/, languages: '*', cwe: 'CWE-798', truncateMatch: true, skipTestFiles: true, validate: validateHardcodedApiKey,
+  },
+  {
+    id: 'VULN-116', severity: 'high', category: 'hardcoded-secret',
+    title: 'Hardcoded Private Key Block (PEM)',
+    description: 'PEM private key blocks in code will be committed to version history. Move to a secrets manager.',
+    pattern: /-----BEGIN (?:ENCRYPTED |OPENSSH |RSA |EC |DSA |PKCS8 )?PRIVATE KEY-----/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
+  {
+    id: 'VULN-117', severity: 'high', category: 'hardcoded-secret',
+    title: 'GCP Service Account JSON Key Detected',
+    description: 'GCP service account JSON with private_key_id and private_key fields provides persistent GCP access.',
+    pattern: /"private_key_id"\s*:\s*"[A-Za-z0-9]{40}"/, languages: '*', cwe: 'CWE-798', truncateMatch: true,
+  },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MEDIUM — Universal patterns

@@ -100,9 +100,19 @@ export async function POST(request: NextRequest) {
     const isCode = SCAN_EXTENSIONS.has(ext);
     const isManifest = MANIFEST_FILES.has(fileName);
     const isCsproj = ext === 'csproj';
+    const pathLower = path.toLowerCase();
     const isInfraFile = fileName === 'Dockerfile' || fileName.startsWith('Dockerfile.')
       || (fileName.startsWith('docker-compose') && (ext === 'yml' || ext === 'yaml'))
-      || (path.toLowerCase().includes('.github/workflows/') && (ext === 'yml' || ext === 'yaml'));
+      || (pathLower.includes('.github/workflows/') && (ext === 'yml' || ext === 'yaml'))
+      || ext === 'tf'
+      || (
+        (ext === 'yml' || ext === 'yaml') && (
+          pathLower.includes('/k8s/') || pathLower.includes('/kubernetes/') ||
+          pathLower.includes('/manifests/') || pathLower.includes('/helm/') ||
+          pathLower.includes('/deploy/') || fileName.includes('deployment') ||
+          fileName.includes('service') || fileName.includes('configmap') || fileName.includes('rbac')
+        )
+      );
 
     if (!isCode && !isManifest && !isCsproj && !isInfraFile) continue;
 

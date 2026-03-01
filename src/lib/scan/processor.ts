@@ -15,6 +15,8 @@ import { scanNpmLicenses } from '@/lib/detection/license-scanning/detector';
 import type { LicenseResult } from '@/lib/detection/license-scanning/types';
 import { detectInfraIssues, getInfraFileType } from '@/lib/detection/infrastructure/detector';
 import type { InfraResult, InfraFinding } from '@/lib/detection/infrastructure/types';
+import { detectPii } from '@/lib/detection/pii/detector';
+import type { PiiResult } from '@/lib/detection/pii/types';
 import { calculateAIDebtScore } from '@/lib/scoring/ai-debt-score';
 import type { Json } from '@/types/database';
 
@@ -241,6 +243,10 @@ export async function processPendingScan(): Promise<{
     let totalEnhHighImpact = 0;
     let totalEnhMediumImpact = 0;
     let totalEnhLowImpact = 0;
+    let totalPiiCritical = 0;
+    let totalPiiHigh = 0;
+    let totalPiiMedium = 0;
+    let piiCategoriesFound = new Set<string>();
 
     for (let i = 0; i < tree.length; i++) {
       const file = tree[i];
@@ -263,6 +269,7 @@ export async function processPendingScan(): Promise<{
           const vulnerabilities = detectVulnerabilities(content, language, file.path);
           const codeQuality = detectCodeQuality(content, language);
           const enhancements = detectEnhancements(content, language);
+          const pii = detectPii(content, file.path, language);
 
           const aiLoc = Math.round(loc * detection.combined_probability);
           totalLoc += loc;
@@ -277,6 +284,12 @@ export async function processPendingScan(): Promise<{
           totalEnhHighImpact += enhancements.high_impact;
           totalEnhMediumImpact += enhancements.medium_impact;
           totalEnhLowImpact += enhancements.low_impact;
+          if (pii.total_findings > 0) {
+            totalPiiCritical += pii.critical_count;
+            totalPiiHigh += pii.high_count;
+            totalPiiMedium += pii.medium_count;
+            piiCategoriesFound = new Set([...piiCategoriesFound, ...pii.categories_detected]);
+          }
 
           // Track worst quality grade across all files
           if (qualityGradeOrder.indexOf(codeQuality.quality_grade) > qualityGradeOrder.indexOf(worstQualityGrade)) {
@@ -301,6 +314,7 @@ export async function processPendingScan(): Promise<{
               vulnerabilities,
               code_quality: codeQuality,
               enhancements,
+              pii: pii.total_findings > 0 ? pii : null,
             })) as Json,
           });
         }
@@ -703,6 +717,20 @@ export async function processPendingScan(): Promise<{
       });
     }
 
+    // PII alerts
+    const totalPiiFindings = totalPiiCritical + totalPiiHigh + totalPiiMedium;
+    if (totalPiiCritical > 0) {
+      alertInserts.push({
+        company_id: repo.company_id,
+        repository_id: repo.id,
+        severity: 'high',
+        category: 'pii',
+        title: `PII detected in ${repo.full_name} source code`,
+        description: `${totalPiiCritical} critical PII finding${totalPiiCritical > 1 ? 's' : ''} found (${Array.from(piiCategoriesFound).join(', ')}). This may violate GDPR, HIPAA, or PCI-DSS.`,
+        status: 'active',
+      });
+    }
+
     if (alertInserts.length > 0) {
       await admin.from('alerts').insert(alertInserts);
     }
@@ -740,6 +768,13 @@ export async function processPendingScan(): Promise<{
         low_impact: totalEnhLowImpact,
         total_suggestions: totalEnhHighImpact + totalEnhMediumImpact + totalEnhLowImpact,
       },
+      pii_findings: totalPiiFindings > 0 ? {
+        total_findings: totalPiiFindings,
+        critical_count: totalPiiCritical,
+        high_count: totalPiiHigh,
+        medium_count: totalPiiMedium,
+        categories_detected: Array.from(piiCategoriesFound),
+      } : null,
       dependency_vulnerabilities: multiDepResult ? {
         ecosystems_scanned: multiDepResult.ecosystems_scanned,
         total_dependencies: multiDepResult.total_dependencies,
