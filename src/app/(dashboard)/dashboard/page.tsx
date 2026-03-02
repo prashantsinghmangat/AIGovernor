@@ -42,7 +42,7 @@ export default function DashboardPage() {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <Skeleton className="lg:col-span-1 h-40" />
-          <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="lg:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-28" />
             ))}
@@ -89,7 +89,7 @@ export default function DashboardPage() {
             <GaugeChart value={debtScore?.score ?? 0} />
           </CardContent>
         </Card>
-        <div className="lg:col-span-4 grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
             icon={FileCode}
             label="AI-Generated LOC"
@@ -174,9 +174,9 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 shrink-0">
+                    <div className="flex items-center gap-2 md:gap-4 shrink-0">
                       {repo.vulnerabilities && repo.vulnerabilities.total > 0 && (
-                        <div className="flex items-center gap-1 text-right">
+                        <div className="hidden sm:flex items-center gap-1 text-right">
                           <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
                           <span className="text-xs font-mono text-red-400">{repo.vulnerabilities.total}</span>
                         </div>
@@ -188,7 +188,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                       {repo.risk_zone && (
-                        <span className={`text-[10px] font-medium uppercase px-2 py-0.5 rounded ${riskColor}`}>
+                        <span className={`hidden sm:inline text-[10px] font-medium uppercase px-2 py-0.5 rounded ${riskColor}`}>
                           {repo.risk_zone}
                         </span>
                       )}

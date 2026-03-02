@@ -67,12 +67,12 @@ export default function AIDebtPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-display font-bold text-white">AI Debt Analysis</h1>
           <p className="text-sm text-[#8892b0] mt-1">Track and manage AI-generated technical debt</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleRunScan} disabled={isPending}>
+        <Button className="bg-blue-600 hover:bg-blue-700 text-white sm:shrink-0" onClick={handleRunScan} disabled={isPending}>
           {isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
           {isPending ? 'Scanning...' : 'Run Governance Scan'}
         </Button>

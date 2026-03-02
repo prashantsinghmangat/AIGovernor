@@ -13,7 +13,7 @@ export default function BillingPage() {
         <CardHeader>
           <CardTitle className="text-white text-base">Current Plan</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center justify-between">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold text-white">Growth</span>

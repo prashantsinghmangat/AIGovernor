@@ -443,9 +443,9 @@ export default function RepositoryDetailPage() {
   }))
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             {isUploadRepo ? <FileArchive className="h-5 w-5 text-blue-400" /> : <GitBranch className="h-5 w-5 text-blue-400" />}
@@ -500,7 +500,7 @@ export default function RepositoryDetailPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {!isUploadRepo && (
             <Button variant="outline" size="sm" asChild>
               <a
@@ -509,7 +509,8 @@ export default function RepositoryDetailPage() {
                 rel="noopener noreferrer"
               >
                 <ExternalLinkIcon className="mr-2 h-4 w-4" />
-                View on GitHub
+                <span className="hidden sm:inline">View on GitHub</span>
+                <span className="sm:hidden">GitHub</span>
               </a>
             </Button>
           )}
@@ -520,17 +521,18 @@ export default function RepositoryDetailPage() {
             disabled={downloading}
           >
             {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            {downloading ? "Generating…" : "Download Report"}
+            <span className="hidden sm:inline">{downloading ? "Generating…" : "Download Report"}</span>
+            <span className="sm:hidden">{downloading ? "…" : "PDF"}</span>
           </Button>
           {isUploadRepo ? (
             <Button size="sm" onClick={() => setUploadDialogOpen(true)} disabled={!!isScanning}>
               {isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              {isScanning ? "Scanning..." : "Upload New Version"}
+              {isScanning ? "Scanning..." : "Upload"}
             </Button>
           ) : (
             <Button size="sm" onClick={handleTriggerScan} disabled={scanPending || !!isScanning || !!runningScanFromHistory}>
               {scanPending || isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScanIcon className="mr-2 h-4 w-4" />}
-              {isScanning ? "Scanning..." : scanPending ? "Queuing..." : "Trigger Scan"}
+              {isScanning ? "Scanning..." : scanPending ? "Queuing..." : "Scan"}
             </Button>
           )}
         </div>

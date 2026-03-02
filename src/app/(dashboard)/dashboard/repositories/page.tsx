@@ -47,7 +47,7 @@ export default function RepositoriesPage() {
       <GitHubStatusBanner />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-display font-bold text-white">Repository Risk</h1>
           <p className="text-sm text-[#8892b0] mt-1">
@@ -56,15 +56,17 @@ export default function RepositoriesPage() {
               : 'AI governance risk overview by repository'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={() => setUploadDialogOpen(true)} size="sm" variant="outline" className="gap-2 border-[#1e2a4a]">
             <Upload className="h-4 w-4" />
-            Upload ZIP
+            <span className="hidden xs:inline">Upload ZIP</span>
+            <span className="xs:hidden">Upload</span>
           </Button>
           {githubStatus?.connected && (
             <Button onClick={() => setAddDialogOpen(true)} size="sm" className="gap-2">
               <Plus className="h-4 w-4" />
-              Add Repositories
+              <span className="hidden xs:inline">Add Repositories</span>
+              <span className="xs:hidden">Add</span>
             </Button>
           )}
         </div>
