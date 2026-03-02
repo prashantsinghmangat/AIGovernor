@@ -67,7 +67,10 @@
       "Bash(npx tsc --noEmit --pretty)",
       "Bash(grep -r \"category:\" src/lib/detection/rules/*.ts)",
       "Bash(grep -r \"languages:\" src/lib/detection/rules/*.ts)",
-      "Bash(ls -1 src/lib/detection/dependency-scanning/*adapter.ts)"
+      "Bash(ls -1 src/lib/detection/dependency-scanning/*adapter.ts)",
+      "Bash(grep -v \"//\")",
+      "Bash(npm install jspdf jspdf-autotable)",
+      "Bash(node -e \"const at = require\\(''jspdf-autotable''\\); console.log\\(typeof at, typeof at.default, Object.keys\\(at\\).slice\\(0,5\\)\\)\")"
     ]
   }
 }

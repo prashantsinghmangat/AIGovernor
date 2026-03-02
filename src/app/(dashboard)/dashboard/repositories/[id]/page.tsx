@@ -35,6 +35,7 @@ import {
   PackageIcon,
   FileArchive,
   Upload,
+  Download,
 } from "lucide-react"
 import { useRepository } from "@/hooks/use-repository"
 import { useGitHubStatus } from "@/hooks/use-github-status"
@@ -49,6 +50,7 @@ import { RemediationPanel } from "@/components/dashboard/repo-detail/remediation
 import { SensitiveFilesCard } from "@/components/dashboard/repo-detail/sensitive-files-card"
 import { LicenseComplianceCard } from "@/components/dashboard/repo-detail/license-compliance-card"
 import { InfrastructureCard } from "@/components/dashboard/repo-detail/infrastructure-card"
+import { useReportDownload } from "@/hooks/use-report-download"
 import { formatRelativeTime, formatDate } from "@/lib/utils/format"
 
 const STYLE_SIGNAL_LABELS: Record<string, { label: string; description: string; weight: number }> = {
@@ -314,6 +316,7 @@ export default function RepositoryDetailPage() {
   const [riskFilter, setRiskFilter] = useState<"all" | "high" | "medium" | "low" | "vulns">("all")
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const fileTableRef = useRef<HTMLDivElement>(null)
+  const { downloading, downloadRepoReport } = useReportDownload()
 
   const { data, isLoading } = useRepository(repoId)
   const { data: githubStatus } = useGitHubStatus()
@@ -510,6 +513,15 @@ export default function RepositoryDetailPage() {
               </a>
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadRepoReport(repoId, repo.name)}
+            disabled={downloading}
+          >
+            {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+            {downloading ? "Generating…" : "Download Report"}
+          </Button>
           {isUploadRepo ? (
             <Button size="sm" onClick={() => setUploadDialogOpen(true)} disabled={!!isScanning}>
               {isScanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
