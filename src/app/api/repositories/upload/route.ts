@@ -89,7 +89,9 @@ export async function POST(request: NextRequest) {
   for (const [relativePath, zipEntry] of entries) {
     if (zipEntry.dir) continue;
 
-    const path = relativePath;
+    // Prevent path traversal — reject paths with .. or absolute paths
+    if (relativePath.includes('..') || relativePath.startsWith('/') || relativePath.startsWith('\\')) continue;
+    const path = relativePath.replace(/\\/g, '/');
 
     // Determine extension and filename
     const parts = path.split('.');

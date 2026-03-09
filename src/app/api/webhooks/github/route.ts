@@ -11,8 +11,17 @@ export async function POST(request: NextRequest) {
     return new NextResponse('Missing headers', { status: 400 });
   }
 
-  const payload = JSON.parse(body);
-  const repoGithubId = payload.repository?.id;
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return new NextResponse('Invalid JSON payload', { status: 400 });
+  }
+
+  const repoGithubId = (payload.repository as Record<string, unknown> | undefined)?.id as number | undefined;
+  if (!repoGithubId) {
+    return new NextResponse('Missing repository ID in payload', { status: 400 });
+  }
 
   const supabase = createAdminSupabase();
   const { data: repo } = await supabase
@@ -23,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   if (!repo) return new NextResponse('Unknown repository', { status: 404 });
 
+  // Verify signature BEFORE processing any payload data
   if (repo.webhook_secret && !verifyWebhookSignature(body, signature, repo.webhook_secret)) {
     return new NextResponse('Invalid signature', { status: 401 });
   }
@@ -38,7 +48,7 @@ export async function POST(request: NextRequest) {
       break;
 
     case 'pull_request':
-      if (['opened', 'closed', 'reopened'].includes(payload.action)) {
+      if (['opened', 'closed', 'reopened'].includes(payload.action as string)) {
         await supabase.from('scans').insert({
           company_id: repo.company_id,
           repository_id: repo.id,
@@ -51,7 +61,7 @@ export async function POST(request: NextRequest) {
     case 'pull_request_review':
       await supabase.from('pull_requests').update({
         human_reviewed: true,
-      }).eq('repository_id', repo.id).eq('github_pr_id', payload.pull_request?.id);
+      }).eq('repository_id', repo.id).eq('github_pr_id', (payload.pull_request as Record<string, unknown> | undefined)?.id as number);
       break;
   }
 

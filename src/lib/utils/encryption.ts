@@ -15,9 +15,19 @@ export function encrypt(text: string): string {
 }
 
 export function decrypt(encryptedText: string): string {
-  const [ivHex, authTagHex, encrypted] = encryptedText.split(':');
+  const parts = encryptedText.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted data format');
+  }
+  const [ivHex, authTagHex, encrypted] = parts;
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(authTagHex, 'hex');
+  if (iv.length !== 16) {
+    throw new Error('Invalid IV length — expected 16 bytes');
+  }
+  if (authTag.length !== 16) {
+    throw new Error('Invalid auth tag length — expected 16 bytes');
+  }
   const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv);
   decipher.setAuthTag(authTag);
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');

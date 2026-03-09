@@ -154,8 +154,8 @@ export async function processPendingScan(): Promise<{
         commitTitle = commits[0].commit.message.split('\n')[0].slice(0, 120);
         commitDate = commits[0].commit.committer?.date ?? commits[0].commit.author?.date ?? null;
       }
-    } catch {
-      console.log(`[Scan Processor] Could not fetch commits for ${repo.full_name} (may be empty)`);
+    } catch (err) {
+      console.warn(`[Scan Processor] Could not fetch commits for ${repo.full_name}:`, err instanceof Error ? err.message : err);
     }
 
     // Store commit info on the scan record so the UI can show it during progress
@@ -318,8 +318,9 @@ export async function processPendingScan(): Promise<{
             })) as Json,
           });
         }
-      } catch {
+      } catch (err) {
         // Skip files that can't be fetched (binary, too large, etc.)
+        console.debug(`[Scan Processor] Skipped file ${file.path}:`, err instanceof Error ? err.message : err);
       }
 
       // Update progress periodically (10-80% range for file processing)

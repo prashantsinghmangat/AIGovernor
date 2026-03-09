@@ -193,6 +193,29 @@ const PII_RULES: PiiRule[] = [
     pattern: /\b(?:dob|date_of_birth|dateofbirth|birth_date|birthdate)\s*[:=]\s*['"]?\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}['"]?\b/i,
     validate: (line) => isDataLine(line),
   },
+  // ── IP Addresses ──────────────────────────────────────────────────────────
+  {
+    id: 'PII-009',
+    category: 'ip-address',
+    severity: 'medium',
+    title: 'Hardcoded IP Address',
+    description:
+      'A non-private IP address was detected in source code. Hardcoded IPs can expose internal infrastructure and are a security risk.',
+    remediation:
+      'Move IP addresses to environment variables or configuration files. Use DNS names instead of IP addresses where possible.',
+    pattern: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/,
+    validate: (line, match) => {
+      if (!isDataLine(line)) return false;
+      // Exclude private/local/loopback IPs — only flag public IPs
+      if (/^(?:127\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.|192\.168\.|0\.0\.)/.test(match)) return false;
+      // Exclude broadcast/subnet masks
+      if (match === '255.255.255.255' || match === '255.255.255.0') return false;
+      // Exclude version-like patterns (e.g. "version: 1.2.3.4")
+      const before = line.substring(0, line.indexOf(match));
+      if (/(?:version|ver|v)\s*[:=]?\s*$/i.test(before)) return false;
+      return true;
+    },
+  },
 ];
 
 // ─── Detector ─────────────────────────────────────────────────────────────────
@@ -228,9 +251,12 @@ export function detectPii(
       if (rule.validate && !rule.validate(line, matchedText)) continue;
 
       // Redact the match for storage — never store actual PII
-      const redacted = matchedText.replace(/[A-Za-z0-9]/g, (c, idx) =>
-        idx < 4 ? c : '*',
-      );
+      // Show first 4 alphanumeric chars, mask the rest
+      let alphaCount = 0;
+      const redacted = matchedText.replace(/[A-Za-z0-9]/g, (c) => {
+        alphaCount++;
+        return alphaCount <= 4 ? c : '*';
+      });
 
       findings.push({
         category: rule.category,
