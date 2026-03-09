@@ -72,7 +72,12 @@
       "Bash(npm install jspdf jspdf-autotable)",
       "Bash(node -e \"const at = require\\(''jspdf-autotable''\\); console.log\\(typeof at, typeof at.default, Object.keys\\(at\\).slice\\(0,5\\)\\)\")",
       "Bash(head -5 src/app/\\\\\\(dashboard\\\\\\)/dashboard/ai-debt/page.tsx)",
-      "Bash(python3 -c \":*)"
+      "Bash(python3 -c \":*)",
+      "Bash(ls -la /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard/)",
+      "Bash(xargs wc -l)",
+      "Bash(xargs grep -l \"real.time\\\\|Realtime\\\\|REALTIME\")",
+      "Bash(ls /d/Project/AIGovernor/supabase/migrations/*.sql)",
+      "Bash(ls d:/Project/AIGovernor/src/app/api/scan/[id]/)"
     ]
   }
 }

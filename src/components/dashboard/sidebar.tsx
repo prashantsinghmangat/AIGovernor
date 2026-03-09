@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Home, Activity, Users, FileText, GitBranch, DollarSign,
+  Home, Activity, Users, FileText, GitBranch, GitPullRequest, GitCompare, DollarSign,
   Bell, Brain, Layers, CreditCard, Settings, Shield, ChevronLeft, ChevronRight, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
 const iconMap: Record<string, React.ElementType> = {
-  Home, Activity, Users, FileText, GitBranch, DollarSign,
+  Home, Activity, Users, FileText, GitBranch, GitPullRequest, GitCompare, DollarSign,
   Bell, Brain, Layers, CreditCard, Settings, Shield,
 };
 
@@ -25,6 +25,8 @@ const links = [
   { href: '/dashboard/adoption', label: 'Adoption Health', icon: 'Users' },
   { href: '/dashboard/reports', label: 'Governance Reports', icon: 'FileText' },
   { href: '/dashboard/repositories', label: 'Repository Risk', icon: 'GitBranch' },
+  { href: '/dashboard/pull-requests', label: 'PR Analysis', icon: 'GitPullRequest' },
+  { href: '/dashboard/scan-diff', label: 'Scan Comparison', icon: 'GitCompare' },
   { href: '/dashboard/team', label: 'Team Insights', icon: 'Users' },
   { href: '/dashboard/roi', label: 'ROI Calculator', icon: 'DollarSign' },
   { href: '/dashboard/alerts', label: 'Alerts', icon: 'Bell', badge: true },

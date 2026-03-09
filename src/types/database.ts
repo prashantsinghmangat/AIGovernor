@@ -198,6 +198,7 @@ export interface Database {
           summary: Json;
           error_message: string | null;
           commit_sha: string | null;
+          pr_metadata: Json | null;
           started_at: string | null;
           completed_at: string | null;
           created_at: string;
@@ -215,6 +216,7 @@ export interface Database {
           summary?: Json;
           error_message?: string | null;
           commit_sha?: string | null;
+          pr_metadata?: Json | null;
           started_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -232,6 +234,7 @@ export interface Database {
           summary?: Json;
           error_message?: string | null;
           commit_sha?: string | null;
+          pr_metadata?: Json | null;
           started_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -394,6 +397,9 @@ export interface Database {
           human_reviewed: boolean;
           review_count: number;
           approved: boolean | null;
+          scan_id: string | null;
+          findings_posted: boolean;
+          findings_summary: Json;
           pr_created_at: string | null;
           pr_merged_at: string | null;
           analyzed_at: string | null;
@@ -416,6 +422,9 @@ export interface Database {
           human_reviewed?: boolean;
           review_count?: number;
           approved?: boolean | null;
+          scan_id?: string | null;
+          findings_posted?: boolean;
+          findings_summary?: Json;
           pr_created_at?: string | null;
           pr_merged_at?: string | null;
           analyzed_at?: string | null;
@@ -438,6 +447,9 @@ export interface Database {
           human_reviewed?: boolean;
           review_count?: number;
           approved?: boolean | null;
+          scan_id?: string | null;
+          findings_posted?: boolean;
+          findings_summary?: Json;
           pr_created_at?: string | null;
           pr_merged_at?: string | null;
           analyzed_at?: string | null;
@@ -731,6 +743,172 @@ export interface Database {
             columns: ["company_id"];
             isOneToOne: false;
             referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notification_settings: {
+        Row: {
+          id: string;
+          company_id: string;
+          channel: string;
+          enabled: boolean;
+          config: Json;
+          on_scan_complete: boolean;
+          on_critical_vulnerability: boolean;
+          on_high_vulnerability: boolean;
+          on_pii_detected: boolean;
+          on_debt_score_drop: boolean;
+          on_pr_analysis: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          channel: string;
+          enabled?: boolean;
+          config?: Json;
+          on_scan_complete?: boolean;
+          on_critical_vulnerability?: boolean;
+          on_high_vulnerability?: boolean;
+          on_pii_detected?: boolean;
+          on_debt_score_drop?: boolean;
+          on_pr_analysis?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          channel?: string;
+          enabled?: boolean;
+          config?: Json;
+          on_scan_complete?: boolean;
+          on_critical_vulnerability?: boolean;
+          on_high_vulnerability?: boolean;
+          on_pii_detected?: boolean;
+          on_debt_score_drop?: boolean;
+          on_pr_analysis?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_settings_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notification_log: {
+        Row: {
+          id: string;
+          company_id: string;
+          channel: string;
+          event_type: string;
+          title: string;
+          body: string;
+          metadata: Json;
+          status: string;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          channel: string;
+          event_type: string;
+          title: string;
+          body: string;
+          metadata?: Json;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          channel?: string;
+          event_type?: string;
+          title?: string;
+          body?: string;
+          metadata?: Json;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_log_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      scan_schedules: {
+        Row: {
+          id: string;
+          company_id: string;
+          repository_id: string;
+          schedule_type: string;
+          cron_expression: string | null;
+          scan_type: string;
+          enabled: boolean;
+          last_run_at: string | null;
+          next_run_at: string | null;
+          run_count: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          repository_id: string;
+          schedule_type?: string;
+          cron_expression?: string | null;
+          scan_type?: string;
+          enabled?: boolean;
+          last_run_at?: string | null;
+          next_run_at?: string | null;
+          run_count?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          repository_id?: string;
+          schedule_type?: string;
+          cron_expression?: string | null;
+          scan_type?: string;
+          enabled?: boolean;
+          last_run_at?: string | null;
+          next_run_at?: string | null;
+          run_count?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "scan_schedules_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "scan_schedules_repository_id_fkey";
+            columns: ["repository_id"];
+            isOneToOne: false;
+            referencedRelation: "repositories";
             referencedColumns: ["id"];
           },
         ];

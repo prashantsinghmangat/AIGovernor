@@ -102,6 +102,18 @@ export async function processPendingScan(): Promise<{
     return processUploadScan(scanId);
   }
 
+  // Route PR scans to the dedicated PR processor
+  if (pendingScan.scan_type === 'pr_scan') {
+    const { processPRScan } = await import('./pr-processor');
+    return processPRScan(scanId);
+  }
+
+  // Route incremental scans to the dedicated incremental processor
+  if (pendingScan.scan_type === 'incremental') {
+    const { processIncrementalScan } = await import('./incremental-processor');
+    return processIncrementalScan(scanId);
+  }
+
   const repo = pendingScan.repository as {
     id: string;
     company_id: string;
@@ -884,6 +896,19 @@ export async function processPendingScan(): Promise<{
     }
 
     console.log(`[Scan Processor] Completed scan ${scanId} — ${scanResults.length} files, score: ${debtScore.score}`);
+
+    // 12. Send notifications
+    try {
+      const { notifyScanComplete } = await import('@/lib/notifications/service');
+      await notifyScanComplete(repo.company_id, repo.full_name, scanId, {
+        total_files: scanResults.length,
+        vulnerabilities: { critical: totalVulnCritical, high: totalVulnHigh, total: totalVulnCritical + totalVulnHigh + totalVulnMedium + totalVulnLow },
+        debt_score: debtScore.score,
+        ai_loc_percentage: aiLocPct,
+      });
+    } catch (notifErr) {
+      console.log(`[Scan Processor] Notification error:`, notifErr instanceof Error ? notifErr.message : 'unknown');
+    }
 
     return {
       success: true,
