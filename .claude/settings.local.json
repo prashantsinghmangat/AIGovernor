@@ -77,7 +77,8 @@
       "Bash(xargs wc -l)",
       "Bash(xargs grep -l \"real.time\\\\|Realtime\\\\|REALTIME\")",
       "Bash(ls /d/Project/AIGovernor/supabase/migrations/*.sql)",
-      "Bash(ls d:/Project/AIGovernor/src/app/api/scan/[id]/)"
+      "Bash(ls d:/Project/AIGovernor/src/app/api/scan/[id]/)",
+      "Bash(grep -r \"from ''@/components/dashboard\" /d/Project/AIGovernor/src/app/\\\\\\(dashboard\\\\\\)/dashboard --include=\"*.tsx\")"
     ]
   }
 }

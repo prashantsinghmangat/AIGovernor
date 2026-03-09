@@ -10,12 +10,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase.from('users').select('company_id').eq('id', user.id).single();
+    const { data: profile } = await supabase.from('users').select('company_id, role, companies(name)').eq('id', user.id).single();
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found', code: 'NOT_FOUND' }, { status: 404 });
     }
 
     const companyId = profile.company_id;
+    const companyName = (profile.companies as { name?: string } | null)?.name ?? '';
+    const userEmail = user.email ?? '';
+    const userRole = profile.role ?? '';
 
     const [scoresRes, alertsRes, reposRes, latestScanRes, repoScoresRes] = await Promise.all([
       supabase.from('ai_debt_scores').select('*').eq('company_id', companyId).is('repository_id', null).order('calculated_at', { ascending: false }).limit(6),
@@ -95,6 +98,9 @@ export async function GET() {
         })),
         last_scan: lastScanText,
         repos_monitored: reposRes.data?.length ?? 0,
+        company_name: companyName,
+        user_email: userEmail,
+        user_role: userRole,
       },
     });
   } catch (error) {
