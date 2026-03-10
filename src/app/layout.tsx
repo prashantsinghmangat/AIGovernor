@@ -6,6 +6,7 @@ import { QueryProvider } from "@/components/providers/query-provider"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { SupabaseProvider } from "@/components/providers/supabase-provider"
 import { Toaster } from "@/components/ui/sonner"
+import BugTraceInit from "@/components/bugtrace/bugtrace-init"
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -50,6 +51,7 @@ export default function RootLayout({
             <QueryProvider>
               {children}
               <Toaster position="bottom-right" richColors closeButton />
+              <BugTraceInit />
             </QueryProvider>
           </SupabaseProvider>
         </ThemeProvider>
